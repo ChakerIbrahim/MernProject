@@ -285,6 +285,24 @@ const listPendingAuctions = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/admin/auctions — admin oversight view of every auction,
+ * regardless of status (active, ended, cancelled, pending_approval).
+ * listPendingAuctions covers only the review queue; this covers the
+ * full history for moderation purposes.
+ */
+const listAllAuctions = async (req, res, next) => {
+  try {
+    const auctions = await Auction.find({})
+      .populate("createdBy", "companyName name")
+      .sort({ createdAt: -1 });
+
+    res.json({ auctions: auctions.map(withTimeRemaining) });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /** PATCH /api/admin/auctions/:id/approve — FR-12.3 */
 const approveAuction = async (req, res, next) => {
   try {
@@ -335,4 +353,5 @@ module.exports = {
   listPendingAuctions,
   approveAuction,
   rejectAuction,
+  listAllAuctions,
 };
