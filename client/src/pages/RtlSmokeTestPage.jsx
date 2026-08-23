@@ -17,7 +17,12 @@ const STAMP_SAMPLES = [
 const SECTION_CLASSES = "mb-8 rounded-card border border-border bg-surface p-4 sm:p-6";
 const SECTION_TITLE_CLASSES = "mb-4 font-display text-lg text-ink";
 
-
+/**
+ * Development-only smoke test. Renders every shared primitive with real
+ * Arabic text plus the three RTL hazards that mirrored Latin placeholder
+ * text will never expose (react-component skill §7.7). Check this page
+ * before every sprint sign-off, at 360px width.
+ */
 const RtlSmokeTestPage = () => {
   const [form, setForm] = useState({ name: "", email: "", register: "" });
 

@@ -14,7 +14,7 @@ const EMPTY_TENDER = {
   deadline: "",
 };
 
-/** FR-6.1 — an approved organization publishes a tender. */
+
 const TenderCreatePage = () => {
   const navigate = useNavigate();
 
