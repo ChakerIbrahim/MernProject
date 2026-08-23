@@ -304,6 +304,25 @@ const approveAuction = async (req, res, next) => {
   }
 };
 
+/** PATCH /api/admin/auctions/:id/reject */
+const rejectAuction = async (req, res, next) => {
+  try {
+    const auction = await Auction.findById(req.params.id);
+    if (!auction) return next(httpError(404, "المزاد المطلوب غير موجود."));
+
+    if (auction.status !== "pending_approval") {
+      return next(httpError(400, "تمت معالجة هذا المزاد مسبقاً."));
+    }
+
+    auction.status = "cancelled";
+    await auction.save();
+
+    res.json({ auction: withTimeRemaining(auction) });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createAuction,
   listActiveAuctions,
@@ -312,4 +331,5 @@ module.exports = {
   listMyBidAuctions,
   listPendingAuctions,
   approveAuction,
+  rejectAuction,
 };

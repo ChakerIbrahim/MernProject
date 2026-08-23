@@ -53,5 +53,6 @@ router.get("/users/me/auctions", isAuth, isRole(["individual"]), listMyBidAuctio
 // --- admin ----------------------------------------------------------------
 router.get("/admin/auctions/pending", isAuth, isRole(["admin"]), listPendingAuctions);
 router.patch("/admin/auctions/:id/approve", isAuth, isRole(["admin"]), approveAuction);
+router.patch("/admin/auctions/:id/reject", isAuth, isRole(["admin"]), rejectAuction);
 
 module.exports = router;
