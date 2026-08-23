@@ -36,6 +36,29 @@ const listPendingOrganizations = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/admin/users — full user directory for account management, since
+ * listPendingOrganizations only surfaces organizations awaiting review.
+ * Password hashes are never returned — the schema's toJSON transform strips
+ * them regardless of how the document was fetched.
+ */
+const listAllUsers = async (req, res, next) => {
+  try {
+    const { role } = req.query;
+    const filter = {};
+
+    if (role && ["admin", "organization", "individual"].includes(role)) {
+      filter.role = role;
+    }
+
+    const users = await User.find(filter).sort({ createdAt: -1 });
+
+    res.json({ users });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /** PATCH /api/admin/organizations/:id/approve — FR-4.2 */
 const approveOrganization = async (req, res, next) => {
   try {
@@ -84,4 +107,5 @@ module.exports = {
   listPendingOrganizations,
   approveOrganization,
   rejectOrganization,
+  listAllUsers,
 };
