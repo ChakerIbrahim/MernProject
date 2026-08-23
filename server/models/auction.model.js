@@ -52,13 +52,19 @@ const auctionSchema = new mongoose.Schema(
         message: "يجب أن يكون موعد الانتهاء في المستقبل.",
       },
     },
-    status: {
+      status: {
       type: String,
       enum: {
         values: AUCTION_STATUSES,
         message: "حالة المزاد غير صالحة.",
       },
       default: "pending_approval",
+    },
+    // FR-12.3-style rejection reason, mirroring User.rejectionReason for
+    // organizations — an admin may explain why a listing was refused.
+    rejectionReason: {
+      type: String,
+      trim: true,
     },
   },
   { timestamps: true }
