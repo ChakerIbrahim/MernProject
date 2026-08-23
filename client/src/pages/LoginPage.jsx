@@ -33,7 +33,7 @@ const LoginPage = () => {
       const nextUser = await login(form.email, form.password);
       navigate(dashboardPathFor(nextUser.role), { replace: true });
     } catch (error) {
-    
+      // NFR-U2: the entered data is never cleared on failure.
       setErrors(readFieldErrors(error));
       setFormError(readFormError(error));
     } finally {
