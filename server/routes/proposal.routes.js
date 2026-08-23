@@ -8,7 +8,7 @@ const {
   updateProposalStatus,
 } = require("../controllers/proposal.controller");
 const { analyzeProposal } = require("../controllers/ai.controller");
-const { isAuth, isRole, isApprovedOrganization } = require("../config/jwt.config");
+const { isAuth,  isApprovedOrganization } = require("../config/jwt.config");
 const { isOwnerOrAdmin } = require("../config/ownership.config");
 const { upload, verifyUploadedFile } = require("../config/multer.config");
 const Tender = require("../models/tender.model");
