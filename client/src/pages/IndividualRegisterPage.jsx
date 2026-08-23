@@ -8,6 +8,7 @@ import { readFieldErrors, readFormError } from "../functions/apiErrors";
 
 const EMPTY_FORM = { name: "", email: "", password: "", nationalId: "" };
 
+/** FR-2 — the account is active immediately (FR-2.2), with no document upload. */
 const IndividualRegisterPage = () => {
   const navigate = useNavigate();
 
