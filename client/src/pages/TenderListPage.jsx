@@ -12,7 +12,6 @@ import { readFormError } from "../functions/apiErrors";
 import { useAuth } from "../functions/authContext";
 import { isApprovedOrganization } from "../functions/roles";
 
-/** FR-7 — browse and filter open tenders. */
 const TenderListPage = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();

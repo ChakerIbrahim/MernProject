@@ -9,6 +9,7 @@ import api from "../functions/api";
 import { readFieldErrors, readFormError } from "../functions/apiErrors";
 import { toDateInputValue } from "../functions/tenders";
 
+/** FR-8.1 — the owning organization edits a tender while it is still open. */
 const TenderEditPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
