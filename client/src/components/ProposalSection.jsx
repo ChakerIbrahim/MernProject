@@ -5,18 +5,7 @@ import api from "../functions/api";
 import { readFieldErrors, readFormError } from "../functions/apiErrors";
 import { describeFileProblem } from "../functions/uploads";
 
-/**
- * The whole proposal submission flow for one tender (FR-9, FR-10).
- *
- * Owns its own state and calls the API directly — the self-contained-lifecycle
- * exception in the react-component skill §1, the same one AuthProvider uses. It
- * is rendered with `key={tenderId}` so moving between tenders remounts it and
- * no state leaks from one tender to the next.
- *
- * @param {string} tenderId
- * @param {boolean} isApproved  the caller's organization is approved
- * @param {boolean} isOpen      the tender still accepts proposals
- */
+
 const ProposalSection = ({ tenderId, isApproved, isOpen }) => {
   const [values, setValues] = useState({ finalPrice: "" });
   const [file, setFile] = useState(null);
