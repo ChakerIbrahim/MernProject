@@ -3,6 +3,7 @@ const {
   listPendingOrganizations,
   approveOrganization,
   rejectOrganization,
+  listAllUsers,
 } = require("../controllers/admin.controller");
 const { isAuth, isRole } = require("../config/jwt.config");
 
@@ -12,6 +13,7 @@ const router = express.Router();
 const adminOnly = [isAuth, isRole(["admin"])];
 
 router.get("/admin/organizations/pending", ...adminOnly, listPendingOrganizations);
+router.get("/admin/users", ...adminOnly, listAllUsers);
 router.patch("/admin/organizations/:id/approve", ...adminOnly, approveOrganization);
 router.patch("/admin/organizations/:id/reject", ...adminOnly, rejectOrganization);
 
