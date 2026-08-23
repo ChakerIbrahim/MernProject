@@ -7,12 +7,7 @@ const BANDS = [
   { min: 0, label: "ثقة منخفضة", bar: "bg-error", text: "text-error" },
 ];
 
-/**
- * The 0–100 confidence that must accompany every AI figure shown to a user
- * (AGENTS.md). Never present extracted data as verified fact.
- *
- * @param {number} score 0–100
- */
+
 const ConfidenceMeter = ({ score }) => {
   if (typeof score !== "number" || Number.isNaN(score)) return null;
 
