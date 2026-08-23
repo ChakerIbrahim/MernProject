@@ -13,6 +13,7 @@ import { useAuth } from "../functions/authContext";
 import { isApprovedOrganization } from "../functions/roles";
 import { formatCurrency, formatDate } from "../functions/tenders";
 
+/** FR-7.3 — tender details, with owner controls and the proposal form (FR-9). */
 const TenderDetailPage = () => {
   const { id } = useParams();
   const { user } = useAuth();
