@@ -13,7 +13,6 @@ import { useAuth } from "../functions/authContext";
 import { POLL_INTERVAL_MS } from "../functions/auctions";
 import { formatCurrency, formatDate } from "../functions/tenders";
 
-/** FR-12.4, FR-12.5 — public auction detail. Bidding arrives in Sprint 07. */
 const AuctionDetailPage = () => {
   const { id } = useParams();
   const { user } = useAuth();
