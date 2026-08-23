@@ -5,6 +5,7 @@ const {
   getTenderById,
   updateTender,
   closeTender,
+  listAllTendersForAdmin,
 } = require("../controllers/tender.controller");
 const { isAuth, isRole, isApprovedOrganization } = require("../config/jwt.config");
 const { isOwnerOrAdmin } = require("../config/ownership.config");
@@ -21,6 +22,10 @@ router.post("/tenders", isAuth, isApprovedOrganization, createTender);
 // FR-7.1 — any authenticated user may browse.
 router.get("/tenders", isAuth, listTenders);
 router.get("/tenders/:id", isAuth, getTenderById);
+
+// Admin oversight — every tender regardless of status. Declared here so it
+// mounts alongside the other tender routes even though it's under /admin.
+router.get("/admin/tenders", isAuth, isRole(["admin"]), listAllTendersForAdmin);
 
 // FR-8.1 — editing belongs to the owning organization alone. allowAdmin is
 // false here: an admin moderates by closing (below), not by rewriting content.

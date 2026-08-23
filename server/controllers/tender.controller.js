@@ -98,6 +98,24 @@ const getTenderById = async (req, res, next) => {
 };
 
 /**
+ * GET /api/admin/tenders — admin oversight view of every tender, regardless
+ * of status (open, closed, cancelled). GET /api/tenders only shows open
+ * tenders publicly, or the caller's own via ?mine=true — neither gives an
+ * admin visibility into the full platform history.
+ */
+const listAllTendersForAdmin = async (req, res, next) => {
+  try {
+    const tenders = await Tender.find({})
+      .populate("createdBy", "companyName")
+      .sort({ createdAt: -1 });
+
+    res.json({ tenders });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * PATCH /api/tenders/:id — FR-8.1
  *
  * isOwnerOrAdmin has already loaded the tender onto req.resource and refused
@@ -158,4 +176,5 @@ module.exports = {
   getTenderById,
   updateTender,
   closeTender,
+  listAllTendersForAdmin,
 };
