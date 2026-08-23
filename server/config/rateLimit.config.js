@@ -55,4 +55,15 @@ const bidLimiter = rateLimit({
   ),
 });
 
-module.exports = { globalLimiter, authLimiter, bidLimiter };
+/** Negotiation messages — cheap to spam a thread with rapid posts. */
+const messageLimiter = rateLimit({
+  windowMs: number(process.env.MESSAGE_RATE_LIMIT_WINDOW_MS, 60 * 1000),
+  limit: number(process.env.MESSAGE_RATE_LIMIT_MAX, 20),
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: arabicLimitResponse(
+    "تم تجاوز عدد الرسائل المسموح بها خلال هذه الفترة. يرجى المحاولة بعد قليل."
+  ),
+});
+
+module.exports = { globalLimiter, authLimiter, bidLimiter, messageLimiter };
