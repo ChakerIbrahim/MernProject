@@ -1,9 +1,4 @@
-/**
- * Progress indication for anything that takes more than a moment —
- * uploads, AI analysis, list loads (NFR-U3).
- *
- * @param {string} [label] Arabic label announced to screen readers
- */
+
 const Spinner = ({ label = "جاري التحميل…" }) => (
   <div
     role="status"
