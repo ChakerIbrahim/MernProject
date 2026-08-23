@@ -4,7 +4,6 @@ const BASE_CLASSES =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-registry-green " +
   "disabled:cursor-not-allowed disabled:opacity-60";
 
-// design.md §2: registry-green for primary, flag-red for destructive (NFR-U4).
 const VARIANT_CLASSES = {
   primary:
     "border-registry-green bg-registry-green text-surface hover:border-green-dark hover:bg-green-dark",
