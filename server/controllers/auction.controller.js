@@ -314,7 +314,10 @@ const rejectAuction = async (req, res, next) => {
       return next(httpError(400, "تمت معالجة هذا المزاد مسبقاً."));
     }
 
+    const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+
     auction.status = "cancelled";
+    auction.rejectionReason = reason || undefined;
     await auction.save();
 
     res.json({ auction: withTimeRemaining(auction) });
