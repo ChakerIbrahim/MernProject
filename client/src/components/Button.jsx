@@ -20,6 +20,7 @@ const VARIANT_CLASSES = {
  *                               a second click firing a second request is a
  *                               real bug in a bidding system
  * @param {boolean} [fullWidth]
+ * @param {string} [title]      native tooltip, e.g. why a control is disabled
  * @param {() => void} [onClick]
  * @param {React.ReactNode} children
  */
@@ -29,12 +30,14 @@ const Button = ({
   disabled = false,
   isLoading = false,
   fullWidth = false,
+  title,
   onClick,
   children,
 }) => (
   <button
     type={type}
     onClick={onClick}
+    title={title}
     disabled={disabled || isLoading}
     aria-busy={isLoading ? true : undefined}
     className={`${BASE_CLASSES} ${VARIANT_CLASSES[variant]} ${fullWidth ? "w-full" : ""}`}

@@ -24,6 +24,42 @@
     {
       "key": "organizationId",
       "value": ""
+    },
+    {
+      "key": "tenderId",
+      "value": ""
+    },
+    {
+      "key": "closedTenderId",
+      "value": ""
+    },
+    {
+      "key": "otherOrgToken",
+      "value": ""
+    },
+    {
+      "key": "pendingOrgToken",
+      "value": ""
+    },
+    {
+      "key": "ownerToken",
+      "value": ""
+    },
+    {
+      "key": "proposalId",
+      "value": ""
+    },
+    {
+      "key": "emptyTenderId",
+      "value": ""
+    },
+    {
+      "key": "auctionId",
+      "value": ""
+    },
+    {
+      "key": "pendingAuctionId",
+      "value": ""
     }
   ],
   "item": [
@@ -981,6 +1017,2148 @@
               ]
             },
             "description": "FR-4.3. Expect 200 { organization } with status rejected and rejectionReason stored. The reason is optional; send {} to omit it."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 03 — Tenders",
+      "item": [
+        {
+          "name": "Create tender — success (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"توريد أجهزة حاسوب مكتبية\",\n  \"description\": \"توريد وتركيب أجهزة حاسوب.\",\n  \"category\": \"تكنولوجيا المعلومات\",\n  \"budgetEstimate\": 50000,\n  \"deadline\": \"2027-06-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ]
+            },
+            "description": "FR-6.1/FR-6.2. Use an APPROVED organization token. Expect 200 { tender } with status open. createdBy comes from the token; sending createdBy or status in the body is ignored."
+          },
+          "response": []
+        },
+        {
+          "name": "Create tender — pending organization (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{pendingOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"توريد أجهزة حاسوب مكتبية\",\n  \"description\": \"توريد وتركيب أجهزة حاسوب.\",\n  \"category\": \"تكنولوجيا المعلومات\",\n  \"budgetEstimate\": 50000,\n  \"deadline\": \"2027-06-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ]
+            },
+            "description": "FR-6.3. Same body with a token from an organization still awaiting review. Expect 403 with an Arabic explanation."
+          },
+          "response": []
+        },
+        {
+          "name": "Create tender — individual (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"توريد أجهزة حاسوب مكتبية\",\n  \"description\": \"توريد وتركيب أجهزة حاسوب.\",\n  \"category\": \"تكنولوجيا المعلومات\",\n  \"budgetEstimate\": 50000,\n  \"deadline\": \"2027-06-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ]
+            },
+            "description": "FR-5.3. Expect 403. An admin token also gets 403: organizations publish tenders, admins moderate them."
+          },
+          "response": []
+        },
+        {
+          "name": "Create tender — past deadline (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"توريد أجهزة حاسوب مكتبية\",\n  \"description\": \"توريد وتركيب أجهزة حاسوب.\",\n  \"category\": \"تكنولوجيا المعلومات\",\n  \"budgetEstimate\": 50000,\n  \"deadline\": \"2020-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ]
+            },
+            "description": "SRS §5.6. Set deadline to a past date. Expect 400 { errors: { deadline: ... } } and no document written."
+          },
+          "response": []
+        },
+        {
+          "name": "Create tender — no token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"توريد أجهزة حاسوب مكتبية\",\n  \"description\": \"توريد وتركيب أجهزة حاسوب.\",\n  \"category\": \"تكنولوجيا المعلومات\",\n  \"budgetEstimate\": 50000,\n  \"deadline\": \"2027-06-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ]
+            },
+            "description": "FR-5.1. Expect 401."
+          },
+          "response": []
+        },
+        {
+          "name": "List tenders — all open (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ]
+            },
+            "description": "FR-7.1. Any authenticated role. Expect 200 { tenders } containing only status open."
+          },
+          "response": []
+        },
+        {
+          "name": "List tenders — filter by category (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders?category=صيانة",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "صيانة"
+                }
+              ]
+            },
+            "description": "FR-7.2. Expect only tenders in that category."
+          },
+          "response": []
+        },
+        {
+          "name": "List tenders — budget range (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders?minBudget=1000&maxBudget=60000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ],
+              "query": [
+                {
+                  "key": "minBudget",
+                  "value": "1000"
+                },
+                {
+                  "key": "maxBudget",
+                  "value": "60000"
+                }
+              ]
+            },
+            "description": "FR-7.2. Expect only tenders whose budgetEstimate falls inside the range. An unmatched range returns an empty list, never everything."
+          },
+          "response": []
+        },
+        {
+          "name": "List tenders — my own (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders?mine=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders"
+              ],
+              "query": [
+                {
+                  "key": "mine",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Backs the organization dashboard. Returns the callers own tenders in every status, closed and cancelled included."
+          },
+          "response": []
+        },
+        {
+          "name": "Tender detail — success (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "FR-7.3. Expect 200 { tender } with createdBy populated to the owning companyName only — never a password field."
+          },
+          "response": []
+        },
+        {
+          "name": "Tender detail — malformed id (404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/not-a-real-id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "not-a-real-id"
+              ]
+            },
+            "description": "API-5. A malformed ObjectId and an unused-but-valid one both return 404, never 500."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit tender — owner (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"عنوان محدث\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "FR-8.1. Owner only, and only while status is open."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit tender — another organization (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"استيلاء\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "FR-8.1. Expect 403. An ADMIN token also gets 403 here: admins moderate by closing, not by rewriting content."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit tender — past deadline on update (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deadline\": \"2020-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "The future-date validator must run on update too, or a tender can be edited into the past."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit tender — closed tender (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"بعد الإغلاق\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{closedTenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{closedTenderId}}"
+              ]
+            },
+            "description": "FR-8.1 allows editing only while open. Expect 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Close tender — owner (200)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "FR-8.2. A soft close: status becomes closed. Send { \"status\": \"cancelled\" } to cancel instead. Closing twice returns 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Close tender — admin, any owner (200)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "FR-8.3. An admin may close or cancel any tender regardless of ownership, to moderate policy violations."
+          },
+          "response": []
+        },
+        {
+          "name": "Close tender — unrelated organization (403)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}"
+              ]
+            },
+            "description": "Expect 403."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 04 — Proposals",
+      "item": [
+        {
+          "name": "Submit proposal — success (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "finalPrice",
+                  "value": "38500",
+                  "type": "text"
+                },
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "A genuine jpg/png/pdf under 5MB"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "FR-9.1. Use an APPROVED organization that does NOT own the tender. Attach a real jpg/png/pdf under 5MB. Expect 200 { proposal } with status submitted, submittedBy taken from the token, and aiExtractedData absent until Sprint 05."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit proposal — own tender (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "finalPrice",
+                  "value": "38500",
+                  "type": "text"
+                },
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "Any valid file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "FR-9.2. Send with the tender OWNER token. Expect 403 { message: \"لا يمكنك تقديم عرض على عطاء تملكه.\" } — a specific message, not a generic refusal."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit proposal — duplicate (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "finalPrice",
+                  "value": "38500",
+                  "type": "text"
+                },
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "Any valid file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "FR-9.3. Re-send the success request. Expect 400 { message: \"لقد قدّمت عرضاً على هذا العطاء مسبقاً.\" }. A compound unique index on (tender, submittedBy) enforces this in the database, so two simultaneous clicks cannot both land."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit proposal — closed tender (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "finalPrice",
+                  "value": "38500",
+                  "type": "text"
+                },
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "Any valid file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{closedTenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{closedTenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "No proposals against a closed or cancelled tender. Expect 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit proposal — pending organization (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{pendingOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "finalPrice",
+                  "value": "38500",
+                  "type": "text"
+                },
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "Any valid file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "FR-6.3 status gate. An organization still awaiting admin review cannot bid. Expect 403. An individual and an admin also get 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit proposal — oversized / wrong type (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "finalPrice",
+                  "value": "38500",
+                  "type": "text"
+                },
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "Over 5MB, or a .txt renamed .pdf"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "C-9 and NFR-S8, same pipeline as Sprint 02. Try a file over 5MB, then a .txt renamed .pdf. Both 400, and neither leaves a file behind in /uploads."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit proposal — missing price (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "proposalDocument",
+                  "src": [],
+                  "type": "file",
+                  "description": "Any valid file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "SRS §5.6. Remove finalPrice, or send a negative number. Expect 400 { errors: { finalPrice: \"يرجى إدخال سعر صحيح.\" } }."
+          },
+          "response": []
+        },
+        {
+          "name": "List proposals — tender owner (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "FR-11.1. Expect 200 { proposals }, each populated with the submitting companyName and never a password field. An admin token also gets 200."
+          },
+          "response": []
+        },
+        {
+          "name": "List proposals — another organization (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{tenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{tenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "The most serious data-exposure risk in this system: competitor pricing. Any organization that does not own the tender gets 403 — including one that submitted a proposal on it. An individual also gets 403."
+          },
+          "response": []
+        },
+        {
+          "name": "List proposals — no proposals yet (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenders/{{emptyTenderId}}/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenders",
+                "{{emptyTenderId}}",
+                "proposals"
+              ]
+            },
+            "description": "NFR-U5. Expect 200 with an empty array, never an error; the client renders the Arabic empty state."
+          },
+          "response": []
+        },
+        {
+          "name": "Proposal detail — permitted (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}"
+              ]
+            },
+            "description": "Readable by the tender owner, the submitting organization, and an admin. The submitter needs it for the AI panel in Sprint 05."
+          },
+          "response": []
+        },
+        {
+          "name": "Proposal detail — unrelated party (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}"
+              ]
+            },
+            "description": "Any other organization or individual gets 403. A malformed id returns 404, never 500."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 05 — AI Analysis & Decisions",
+      "item": [
+        {
+          "name": "Analyze proposal — success (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/analyze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "analyze"
+              ]
+            },
+            "description": "FR-10.1/FR-10.2. Submitter only. Expect 200 { aiExtractedData } with a numeric extractedPrice, an Arabic summary, and confidenceScore 0-100. The result is stored on the proposal. Gemini returns transient 503s under load — the endpoint answers 502 and the manual path stays open."
+          },
+          "response": []
+        },
+        {
+          "name": "Analyze proposal — not the submitter (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/analyze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "analyze"
+              ]
+            },
+            "description": "Only the organization that submitted the proposal may analyse it. The tender owner and any other organization get 403; no token gets 401."
+          },
+          "response": []
+        },
+        {
+          "name": "Analyze proposal — AI unavailable (502)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/analyze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "analyze"
+              ]
+            },
+            "description": "FR-10.4/NFR-R1. Set GEMINI_API_KEY in server/.env to an invalid value and restart. Expect 502 with a calm Arabic message — deliberately NOT 400, so the client knows the upstream failed rather than blaming the user. The proposal itself is unaffected and can still be completed manually."
+          },
+          "response": []
+        },
+        {
+          "name": "Revise final price — submitter (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"finalPrice\": 46000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}"
+              ]
+            },
+            "description": "FR-10.3. The AI figure is advisory. Whatever is sent here becomes finalPrice, and aiExtractedData is kept separately so the tender owner can compare. Only the submitter, and only while the proposal is still awaiting a decision."
+          },
+          "response": []
+        },
+        {
+          "name": "Revise final price — another organization (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"finalPrice\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}"
+              ]
+            },
+            "description": "Expect 403. After a decision has been made, even the submitter gets 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Accept proposal — tender owner (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"accepted\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "status"
+              ]
+            },
+            "description": "FR-11.2. Tender owner only. Expect 200 { proposal } with status accepted. FR-11.4: every OTHER proposal on the tender stays at submitted — rejecting them is a separate explicit action."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject proposal — tender owner (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"rejected\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "status"
+              ]
+            },
+            "description": "FR-11.2. The same endpoint with status rejected. Deciding an already-decided proposal returns 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Decide — not the tender owner (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"accepted\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "status"
+              ]
+            },
+            "description": "The submitting organization, any other organization, and an individual all get 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Decide — invalid status (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"banana\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "status"
+              ]
+            },
+            "description": "Only accepted and rejected are permitted. Expect 400 { errors: { status: ... } }."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 06 — Auctions",
+      "item": [
+        {
+          "name": "Create auction — approved organization (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "سيارة مستعملة",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "سيارة بحالة ممتازة.",
+                  "type": "text"
+                },
+                {
+                  "key": "startingPrice",
+                  "value": "15000",
+                  "type": "text"
+                },
+                {
+                  "key": "endsAt",
+                  "value": "2027-06-30",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "src": [],
+                  "type": "file",
+                  "description": "Optional. jpg/png/pdf under 5MB"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions"
+              ]
+            },
+            "description": "FR-12.1/FR-12.2. Expect 200 { auction } with status pending_approval and currentPrice equal to startingPrice. The image is OPTIONAL — remove the image row and it still succeeds. Sending status in the body is ignored, so a lister cannot self-approve."
+          },
+          "response": []
+        },
+        {
+          "name": "Create auction — admin (200, still pending)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "سيارة مستعملة",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "سيارة بحالة ممتازة.",
+                  "type": "text"
+                },
+                {
+                  "key": "startingPrice",
+                  "value": "15000",
+                  "type": "text"
+                },
+                {
+                  "key": "endsAt",
+                  "value": "2027-06-30",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "src": [],
+                  "type": "file",
+                  "description": "Optional"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions"
+              ]
+            },
+            "description": "FR-12.2. An admin listing gets no shortcut — it is pending_approval like any other and must still be approved."
+          },
+          "response": []
+        },
+        {
+          "name": "Create auction — pending organization (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{pendingOrgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "سيارة مستعملة",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "سيارة بحالة ممتازة.",
+                  "type": "text"
+                },
+                {
+                  "key": "startingPrice",
+                  "value": "15000",
+                  "type": "text"
+                },
+                {
+                  "key": "endsAt",
+                  "value": "2027-06-30",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "src": [],
+                  "type": "file",
+                  "description": "Optional"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions"
+              ]
+            },
+            "description": "The approval gate applies here too. An individual also gets 403; no token gets 401."
+          },
+          "response": []
+        },
+        {
+          "name": "Create auction — bad price or past date (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "سيارة مستعملة",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "سيارة بحالة ممتازة.",
+                  "type": "text"
+                },
+                {
+                  "key": "startingPrice",
+                  "value": "15000",
+                  "type": "text"
+                },
+                {
+                  "key": "endsAt",
+                  "value": "2027-06-30",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "src": [],
+                  "type": "file",
+                  "description": "Optional"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions"
+              ]
+            },
+            "description": "A startingPrice of 0 or negative returns 400, as does an endsAt in the past, each with an Arabic field message."
+          },
+          "response": []
+        },
+        {
+          "name": "Browse auctions — NO TOKEN (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions"
+              ]
+            },
+            "description": "FR-12.4. Send with NO Authorization header at all. Expect 200 { auctions } containing only active listings whose endsAt is still in the future. A pending_approval auction must not appear anywhere in the body — the filter is a database query, not a client-side hide. Each auction carries timeRemainingMs (FR-12.5)."
+          },
+          "response": []
+        },
+        {
+          "name": "Auction detail — NO TOKEN (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}"
+              ]
+            },
+            "description": "FR-12.4. Public. A malformed id returns 404, never 500."
+          },
+          "response": []
+        },
+        {
+          "name": "Auction detail — pending, no token (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{pendingAuctionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{pendingAuctionId}}"
+              ]
+            },
+            "description": "FR-12.2. A pending auction is 404 to the world — 404 rather than 403, so the endpoint does not confirm that a hidden listing exists. Its creator and an admin do get 200."
+          },
+          "response": []
+        },
+        {
+          "name": "My listings (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me",
+                "auctions"
+              ]
+            },
+            "description": "Returns the listings created by the caller, in any status, pending ones included. NOTE: SRS section 4.2 assigns this path to the Individual bidding history (FR-14.4), and sprint-07 re-specifies it that way. The sprint-06 meaning implemented here was chosen deliberately by the owner; Sprint 07 must redefine the path or move this list."
+          },
+          "response": []
+        },
+        {
+          "name": "Pending auctions queue — admin (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/auctions/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "auctions",
+                "pending"
+              ]
+            },
+            "description": "The admin review queue. Not listed in SRS section 4.2 — added because the admin dashboard needs a source for the pending list. A non-admin gets 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve auction — admin (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/auctions/{{pendingAuctionId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "auctions",
+                "{{pendingAuctionId}}",
+                "approve"
+              ]
+            },
+            "description": "FR-12.3. Flips pending_approval to active, after which the auction appears in the public list. Approving an already-active auction returns 400; a non-admin gets 403 and no token gets 401."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 07 — Bidding & Closing",
+      "item": [
+        {
+          "name": "Place bid — accepted (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 6000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}/bid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}",
+                "bid"
+              ]
+            },
+            "description": "FR-13.1/FR-13.3. Individual only. Send an amount strictly greater than currentPrice. Expect 200 { auction } with the price and highest bidder updated, and one new BidHistory row."
+          },
+          "response": []
+        },
+        {
+          "name": "Place bid — equal to current price (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 6000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}/bid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}",
+                "bid"
+              ]
+            },
+            "description": "FR-13.2. Equal is NOT enough — the rule is strictly greater. Expect 400 with the Arabic message about bidding above the current price. Nothing is written to BidHistory."
+          },
+          "response": []
+        },
+        {
+          "name": "Place bid — below current price (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}/bid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}",
+                "bid"
+              ]
+            },
+            "description": "FR-13.2. Same message and status as the equal case. Validation is a single conditional atomic update, so two simultaneous equal bids cannot both succeed."
+          },
+          "response": []
+        },
+        {
+          "name": "Place bid — organization or admin (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 9999\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}/bid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}",
+                "bid"
+              ]
+            },
+            "description": "FR-13.1. Only an individual may bid. An organization and an admin both get 403; no token gets 401."
+          },
+          "response": []
+        },
+        {
+          "name": "Place bid — pending or finished auction (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 9999\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{pendingAuctionId}}/bid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{pendingAuctionId}}",
+                "bid"
+              ]
+            },
+            "description": "A pending_approval auction, and one whose endsAt has passed, both return 400. A malformed auction id returns 404, never 500."
+          },
+          "response": []
+        },
+        {
+          "name": "Auction detail with bid history (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}"
+              ]
+            },
+            "description": "Public, and the endpoint the client polls every 4 seconds (C-10, NFR-P2). Returns { auction, bids } with the ten most recent bids, each carrying only the bidder name, amount and time. FR-14.1: if endsAt has passed, THIS read is what closes the auction — there is no scheduler."
+          },
+          "response": []
+        },
+        {
+          "name": "My auction history (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me/auctions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me",
+                "auctions"
+              ]
+            },
+            "description": "FR-14.4. Individual only — an organization gets 403. Returns every auction the caller has bid on, with myHighestBid and an outcome of winning, outbid, won or lost. This is the SRS section 4.2 meaning of the path; Sprint 06 briefly used it for an organization's own listings, which now live on GET /api/auctions?mine=true."
+          },
+          "response": []
+        },
+        {
+          "name": "My listings, for organizations (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions?mine=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions"
+              ],
+              "query": [
+                {
+                  "key": "mine",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Where an organization's own auctions moved when Sprint 07 reclaimed /api/users/me/auctions. Returns the caller's listings in any status. Without a token it is 401, unlike the plain public list."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 08 — Notifications & Hardening",
+      "item": [
+        {
+          "name": "Rate limit — repeated logins return 429",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody@example.com\",\n  \"password\": \"wrong-password\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "NFR-S / L-3. Send this repeatedly with wrong credentials. With the production defaults (10 attempts / 15 min) the 11th returns 429 and an Arabic message; unrelated endpoints such as GET /api/health keep answering 200, because the tighter limit is scoped to auth. The limits are environment-configurable — RATE_LIMIT_MAX, AUTH_RATE_LIMIT_MAX, BID_RATE_LIMIT_MAX and their windows — and the local .env raises them so the test suites can run. Clear those before deploying."
+          },
+          "response": []
+        },
+        {
+          "name": "Rate limit — bidding is limited separately",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{individualToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auctions/{{auctionId}}/bid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auctions",
+                "{{auctionId}}",
+                "bid"
+              ]
+            },
+            "description": "Bidding has its own window (30 per minute by default) because it is cheap to automate and directly manipulable. Exceeding it returns 429 with an Arabic message, not a bid rejection."
+          },
+          "response": []
+        },
+        {
+          "name": "Security headers and CORS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Inspect the response headers. helmet sets x-content-type-options: nosniff and a Content-Security-Policy on every response. access-control-allow-origin names exactly the configured CLIENT_ORIGIN and is never a wildcard (NFR-S5, C-6). /uploads is the one place Cross-Origin-Resource-Policy is relaxed, so the client on :5173 can load documents and images."
+          },
+          "response": []
+        },
+        {
+          "name": "Notifications are client-side — nothing to call here",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "There is no notification endpoint, by design. C-8 puts EmailJS in the browser: all five notices (organization approved, organization rejected, proposal accepted, proposal rejected, auction won) go through client/src/functions/sendEmail.js, the only file importing @emailjs/browser. Each fires AFTER the API call resolves and is never awaited into the success path. FR-16.3 / NFR-R2: a failed send is logged and dropped — it never blocks, retries or reverses the state change. Verified with deliberately invalid credentials: the send failed and the approval and the proposal acceptance both stood."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sprint 09 — Negotiation & Contract (stretch)",
+      "item": [
+        {
+          "name": "Open the thread (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "messages"
+              ]
+            },
+            "description": "FR-15.1. Returns { messages, thread } with messages oldest first, each carrying its sender and timestamp. The thread block tells the client whether this caller may post. Before the proposal is accepted this returns 400 — the room does not exist yet."
+          },
+          "response": []
+        },
+        {
+          "name": "Post a message (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"هل يمكن تسليم الدفعة الأولى خلال أسبوعين؟\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "messages"
+              ]
+            },
+            "description": "FR-15.1. Either participant — the tender owner or the submitting organization. An empty or whitespace-only body returns 400 with a field-level Arabic message; the maximum is 2000 characters."
+          },
+          "response": []
+        },
+        {
+          "name": "Thread — a third organization (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "messages"
+              ]
+            },
+            "description": "The thread carries commercially sensitive negotiation, so it is closed to everyone but the two participants. Another organization that bid on the same tender gets 403 on both read and post, an individual gets 403, and no token gets 401. The refusal body contains none of the thread content."
+          },
+          "response": []
+        },
+        {
+          "name": "Thread — admin reads but cannot post",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "messages"
+              ]
+            },
+            "description": "An admin may read the thread for moderation and gets canPost:false in the payload. POSTing as an admin returns 403 — moderation, not participation."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate a contract draft (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals/{{proposalId}}/contract-draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals",
+                "{{proposalId}}",
+                "contract-draft"
+              ]
+            },
+            "description": "FR-15.2. TENDER OWNER ONLY — the submitter and any third party get 403, and a proposal that was never accepted gets 400. Returns Arabic prose built from the real tender and the accepted proposal, stored on the proposal and returned as editable text. Uses the same single Gemini module as Sprint 05 (C-7). On any AI failure it returns 502 with a contract-specific Arabic message and the thread keeps working (FR-15.3 / NFR-R1)."
+          },
+          "response": []
+        },
+        {
+          "name": "My submitted proposals (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{orgToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "proposals"
+              ]
+            },
+            "description": "The submitting organization's own proposals, so it can find an accepted one and open the thread. Not in SRS section 4.2, but section 4.1 describes the organization dashboard as 'My tenders, my proposals', and FR-15.1 is unreachable for the submitter without it. Declared before /proposals/:id so the literal path is never read as an id."
           },
           "response": []
         }

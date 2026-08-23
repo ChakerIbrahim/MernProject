@@ -1,4 +1,5 @@
-import EmptyState from "../components/EmptyState";
+import { Link } from "react-router-dom";
+import Button from "../components/Button";
 import LogoutButton from "../components/LogoutButton";
 import PageHeading from "../components/PageHeading";
 import { useAuth } from "../functions/authContext";
@@ -14,7 +15,20 @@ const IndividualDashboardPage = () => {
         actions={<LogoutButton />}
       />
 
-      <EmptyState message="لم تشارك في أي مزاد بعد. المزادات تُضاف في مرحلة لاحقة." />
+      <section className="rounded-card border border-border bg-surface p-4 sm:p-6">
+        <h2 className="mb-3 font-display text-lg text-ink">المزادات</h2>
+        <p className="mb-4 text-sm leading-7 text-text-secondary">
+          تصفّح المزادات النشطة وقدّم مزايدتك، وتابع نتائج مشاركاتك.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/auctions">
+            <Button>تصفّح المزادات</Button>
+          </Link>
+          <Link to="/my-auctions">
+            <Button variant="secondary">مزاداتي</Button>
+          </Link>
+        </div>
+      </section>
     </main>
   );
 };

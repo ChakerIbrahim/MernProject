@@ -15,6 +15,7 @@
  * @param {"rtl"|"ltr"} [dir]       "ltr" for email, URL, phone, reference numbers
  * @param {string} [hint]
  * @param {string} [autoComplete]
+ * @param {string|number} [min]      lower bound for date/number inputs
  * @param {boolean} [disabled]
  * @param {boolean} [required]
  */
@@ -29,6 +30,7 @@ const FormField = ({
   dir,
   hint,
   autoComplete,
+  min,
   disabled = false,
   required = false,
 }) => {
@@ -59,6 +61,7 @@ const FormField = ({
         disabled={disabled}
         required={required}
         autoComplete={autoComplete}
+        min={min}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy || undefined}
         className={`w-full rounded-field border bg-surface px-3 py-2 text-ink text-start

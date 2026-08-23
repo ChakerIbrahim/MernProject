@@ -6,10 +6,15 @@ const helmet = require("helmet");
 
 const connectToDatabase = require("./config/mongoose.config");
 const { UPLOAD_DIR, SIZE_MESSAGE } = require("./config/multer.config");
+const { globalLimiter } = require("./config/rateLimit.config");
 const healthRoutes = require("./routes/health.routes");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
 const adminRoutes = require("./routes/admin.routes");
+const tenderRoutes = require("./routes/tender.routes");
+const proposalRoutes = require("./routes/proposal.routes");
+const auctionRoutes = require("./routes/auction.routes");
+const negotiationRoutes = require("./routes/negotiation.routes");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -21,9 +26,14 @@ app.use(helmet());
 app.use(
   cors({
     credentials: true,
+    // NFR-S5 / C-6 — exactly one origin, from configuration. Never a wildcard.
     origin: process.env.CLIENT_ORIGIN,
   })
 );
+
+// NFR-S / L-3 — a basic global policy. Tighter limits sit on the sensitive
+// endpoints in their own routers.
+app.use("/api", globalLimiter);
 
 // --- routes ---------------------------------------------------------------
 // Uploaded proof documents, served so the admin can open one (L-4: local disk
@@ -40,6 +50,10 @@ app.use("/api", healthRoutes);
 app.use("/api", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api", adminRoutes);
+app.use("/api", tenderRoutes);
+app.use("/api", proposalRoutes);
+app.use("/api", auctionRoutes);
+app.use("/api", negotiationRoutes);
 
 // Unknown path -> 404 JSON, never Express's default HTML page (API-5).
 app.use((req, res) => {

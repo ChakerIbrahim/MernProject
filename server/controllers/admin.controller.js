@@ -45,10 +45,12 @@ const approveOrganization = async (req, res, next) => {
     organization.rejectionReason = undefined;
     await organization.save();
 
-    // TODO(sprint-08): send the approval notice through the shared EmailJS
-    // helper (FR-4.4, FR-16.1). It is triggered client-side; a failed send must
-    // never roll back or retry this approval (FR-4.5, NFR-R2) — the record
-    // above is already the source of truth.
+    // FR-4.4 / FR-16.1 — the approval notice is sent from the browser, after
+    // this response lands, by notifyOrganizationApproved in
+    // client/src/functions/sendEmail.js. EmailJS is client-side by design
+    // (C-8), so there is nothing to send from here. A failed send never rolls
+    // back or retries this approval (FR-4.5, NFR-R2): the record above is
+    // already the source of truth.
 
     res.json({ organization });
   } catch (err) {
@@ -67,9 +69,10 @@ const rejectOrganization = async (req, res, next) => {
     organization.rejectionReason = reason || undefined;
     await organization.save();
 
-    // TODO(sprint-08): send the rejection notice through the shared EmailJS
-    // helper (FR-4.4, FR-16.1), including rejectionReason when present. A
-    // failed send must never roll back this rejection (FR-4.5, NFR-R2).
+    // FR-4.4 / FR-16.1 — the rejection notice, with rejectionReason when
+    // present, is sent from the browser by notifyOrganizationRejected in
+    // client/src/functions/sendEmail.js. A failed send never rolls back this
+    // rejection (FR-4.5, NFR-R2).
 
     res.json({ organization });
   } catch (err) {

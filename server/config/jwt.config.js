@@ -97,4 +97,49 @@ const isApprovedOrganization = (req, res, next) => {
   next();
 };
 
-module.exports = { signToken, isAuth, isRole, isApprovedOrganization };
+/**
+ * FR-12.1 — auctions may be listed by an approved organization OR an admin.
+ * isApprovedOrganization alone refuses admins, so this composes the two.
+ */
+const isApprovedOrganizationOrAdmin = (req, res, next) => {
+  if (!req.user) return next(unauthenticated());
+  if (req.user.role === "admin") return next();
+  return isApprovedOrganization(req, res, next);
+};
+
+/**
+ * For genuinely public endpoints that still behave differently for a signed-in
+ * caller — the public auction detail hides a pending listing from strangers but
+ * shows it to its creator and to admins (FR-12.2, FR-12.4).
+ *
+ * Never rejects: a missing or invalid token simply leaves req.user undefined.
+ */
+const attachUserIfPresent = async (req, res, next) => {
+  try {
+    const header = req.headers.authorization || "";
+    const [scheme, token] = header.split(" ");
+    if (scheme !== "Bearer" || !token) return next();
+
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.SECRET);
+    } catch {
+      return next();
+    }
+
+    req.user = (await User.findById(payload.id)) || undefined;
+    next();
+  } catch {
+    // A lookup failure must not break a public route.
+    next();
+  }
+};
+
+module.exports = {
+  signToken,
+  isAuth,
+  isRole,
+  isApprovedOrganization,
+  isApprovedOrganizationOrAdmin,
+  attachUserIfPresent,
+};

@@ -46,7 +46,9 @@ const LandingPage = () => {
         )}
       </section>
 
-      {/* Development tool, not a product screen — see sprint-00. */}
+      {/* Development tool, not a product screen. The route itself is absent
+          from the production build (sprint-08), so the link goes with it. */}
+      {import.meta.env.DEV ? (
       <p className="mt-6 text-xs text-text-secondary">
         أداة تطوير:{" "}
         <Link
@@ -56,6 +58,7 @@ const LandingPage = () => {
           صفحة فحص الاتجاه والمكوّنات المشتركة
         </Link>
       </p>
+      ) : null}
     </main>
   );
 };

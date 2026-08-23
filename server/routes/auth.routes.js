@@ -1,6 +1,7 @@
 const express = require("express");
 const { register, login } = require("../controllers/auth.controller");
 const { upload, verifyUploadedFile } = require("../config/multer.config");
+const { authLimiter } = require("../config/rateLimit.config");
 
 const router = express.Router();
 
@@ -10,11 +11,12 @@ const router = express.Router();
 // no file arrived, so one route serves both.
 router.post(
   "/auth/register",
+  authLimiter,
   upload.single("proofDocument"),
   verifyUploadedFile,
   register
 );
 
-router.post("/auth/login", login);
+router.post("/auth/login", authLimiter, login);
 
 module.exports = router;
