@@ -9,6 +9,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config({ path: path.resolve(__dirname, '../server.env'), override: true });
+const { reportEnvironment } = require('./config/env.config');
+reportEnvironment();
 require('./config/mongoose.config');
 
 const app = express();
