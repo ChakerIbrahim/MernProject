@@ -1,832 +1,315 @@
-# اعتماد | ETEMAD
+# اعتماد | Etemad
 
-### AI-Powered Procurement, Tender & Auction Platform
+**اعتماد (Etemad)** is an Arabic, RTL procurement and bidding platform for publishing tenders, submitting proposals, managing organizational accounts, running auctions, and communicating through real-time negotiation chat. The application is designed around a role-based workflow for individuals, organizations, and administrators.
 
-**ETEMAD (اعتماد)** is a full-stack MERN web platform designed to modernize the way organizations publish tenders, evaluate proposals, manage procurement opportunities, and conduct public auctions.
+> **Project status:** Active full-stack application. The repository contains a Vite/React frontend and an Express/MongoDB backend. The payment page is currently a simulation and is not connected to a real payment provider.
 
-The platform brings **organizations, companies, individuals, and administrators** into one centralized digital environment while using **Artificial Intelligence** to assist with proposal analysis and decision-making.
+## Features
 
----
+| Area | Included functionality |
+|---|---|
+| Authentication | Registration, email verification, login, JWT-based authorization, password reset, and role-aware access control |
+| Organization workflow | Organization registration, identity/document review, pending approval, approval/rejection notifications, organization profile, and dashboards |
+| Tenders | Create, edit, publish, browse, view details, manage deadlines, budgets, categories, requirements, and custom fields |
+| Proposals | Upload proposal documents, submit offers, view proposal status, review proposal details, and manage proposal decisions |
+| Auctions | Create and manage auctions, upload product information, display auction details, accept bids, and show bid history and status |
+| Negotiation | Real-time proposal and chat-request conversations using Socket.IO, with unread counts and read states |
+| AI assistance | Gemini-powered extraction and analysis for proposals, identity documents, tender books, and auction-item documents |
+| Email notifications | Email verification, password-reset messaging, organization approval/rejection notices, and platform notifications through EmailJS |
+| Administration | Admin dashboards for users, tenders, auctions, organization approvals, and user status management |
+| Interface | Arabic RTL interface, responsive layouts, dark-mode support, status indicators, charts, and accessible reusable components |
 
-## 📌 Project Overview
+## Architecture
 
-Traditional tender and auction processes can involve fragmented communication, manual document review, limited transparency, and significant administrative effort.
-
-**ETEMAD** provides a centralized digital solution where:
-
-* Organizations can publish and manage tenders.
-* Other organizations can submit proposals.
-* AI analyzes uploaded proposal documents.
-* Tender owners can compare and evaluate proposals.
-* Organizations and administrators can publish auctions.
-* Individuals can participate in auctions and place bids.
-* Administrators manage organization verification and platform content.
-* Accepted proposals can move into a negotiation workflow.
-
-The goal is to make procurement and auction processes more **accessible, organized, transparent, and efficient**.
-
----
-
-## ✨ Key Features
-
-### 🏢 Tender Management
-
-Organizations can:
-
-* Create procurement tenders.
-* Define tender requirements and deadlines.
-* Edit and manage their tenders.
-* Browse available procurement opportunities.
-* Receive proposals from other organizations.
-* Review submitted proposals.
-* Accept or reject proposals.
-* Track tender status through the organization dashboard.
-
----
-
-### 📄 Proposal Management
-
-Registered organizations can submit proposals to eligible tenders.
-
-A proposal can include:
-
-* Proposal information
-* Pricing
-* Uploaded documents
-* Supporting information
-* AI-generated document analysis
-* AI confidence score
-
-Tender owners can review proposal details before making a decision.
-
----
-
-## 🤖 AI-Powered Proposal Analysis
-
-ETEMAD integrates **Google Gemini AI** to assist organizations when reviewing proposal documents.
-
-The AI layer can analyze uploaded proposal documents and extract useful information such as:
-
-* Proposal summary
-* Pricing information
-* Important document details
-* Relevant proposal information
-* Confidence score
-
-AI results are presented as **decision-support information**, rather than replacing the organization's final decision.
-
-If the AI service is unavailable, the proposal workflow can continue without blocking the user.
-
----
-
-## 🔨 Auction System
-
-ETEMAD also includes a digital auction system.
-
-Organizations or administrators can create auctions for assets such as:
-
-* Vehicles
-* Equipment
-* Machinery
-* Other organizational assets
-
-Individuals can:
-
-* Browse available auctions.
-* View auction details.
-* Follow auction countdowns.
-* Submit bids.
-* Track the current auction price.
-* View their auction activity.
-
-The system determines the winning bid when an auction closes.
-
----
-
-## 💬 Negotiation & Communication
-
-After a proposal reaches the appropriate stage, organizations can continue through a negotiation workflow.
-
-The project includes:
-
-* Negotiation pages
-* Organization chat
-* Chat requests
-* Negotiation messages
-* Socket.IO communication infrastructure
-
-This allows organizations involved in a procurement process to communicate inside the platform instead of relying entirely on external communication channels.
-
----
-
-## 👥 User Roles
-
-ETEMAD implements **Role-Based Access Control (RBAC)** with three primary roles.
-
-### 👨‍💼 Admin
-
-Administrators manage and supervise the platform.
-
-They can:
-
-* Review organization registrations
-* Approve or reject organizations
-* Manage users
-* Review tenders
-* Review auctions
-* Moderate platform activity
-* Access administrative dashboards
-
-### 🏢 Organization
-
-Organizations are the primary participants in procurement.
-
-They can:
-
-* Register as an organization
-* Upload verification documents
-* Create tenders
-* Manage their tenders
-* Browse other tenders
-* Submit proposals
-* Review received proposals
-* Create auctions
-* Manage auctions
-* Negotiate with selected organizations
-* View reports and dashboards
-
-### 👤 Individual
-
-Individuals primarily participate in public auctions.
-
-They can:
-
-* Register and log in
-* Browse auctions
-* View auction details
-* Place bids
-* Track their auction participation
-* Access an individual dashboard
-
----
-
-# 🛠️ Technology Stack
-
-ETEMAD is built using the **MERN Stack**.
-
-## Frontend
-
-* React 19
-* Vite
-* React Router
-* Tailwind CSS
-* Axios
-* Recharts
-* Socket.IO Client
-* EmailJS
-
-## Backend
-
-* Node.js
-* Express.js
-* MongoDB
-* Mongoose
-* JSON Web Token
-* bcrypt
-* Multer
-* Socket.IO
-* Helmet
-* Express Rate Limit
-* PDF Parse
-
-## AI
-
-* Google Gemini API
-* `@google/generative-ai`
-
-## Database
-
-* MongoDB
-* Mongoose ODM
-
----
-
-# 🏗️ System Architecture
-
-ETEMAD follows a three-tier architecture:
+The project uses a separate frontend and backend. In development, Vite serves the React application and Express runs on port `8000`. In production, Nginx serves the generated React files and reverse-proxies API requests, uploaded files, and Socket.IO traffic to the Express process.
 
 ```text
-┌──────────────────────────────┐
-│       Presentation Tier      │
-│                              │
-│ React + Vite + Tailwind CSS  │
-│          Port 5173           │
-└──────────────┬───────────────┘
-               │
-               │ HTTP / JSON
-               │ JWT Authentication
-               ▼
-┌──────────────────────────────┐
-│       Application Tier       │
-│                              │
-│ Node.js + Express.js         │
-│ REST API + RBAC              │
-│ Socket.IO                    │
-└──────────────┬───────────────┘
-               │
-               │ Mongoose ODM
-               ▼
-┌──────────────────────────────┐
-│           Data Tier          │
-│                              │
-│          MongoDB             │
-└──────────────────────────────┘
-
-        External Services
-               │
-        ┌──────┴──────┐
-        ▼             ▼
- Google Gemini      EmailJS
- AI Analysis       Notifications
+Browser
+  │
+  ├── React + Vite frontend
+  │     ├── /api/*       ───────┐
+  │     ├── /uploads/*   ───────┼── Nginx reverse proxy ── Express + Socket.IO :8000
+  │     └── /socket.io/* ───────┘                                  │
+  │                                                                ├── MongoDB Atlas
+  │                                                                ├── Gemini API
+  │                                                                └── EmailJS REST API
 ```
 
----
+| Layer | Technology | Directory |
+|---|---|---|
+| Frontend | React 19, Vite, React Router, Tailwind CSS, Recharts, Axios, Socket.IO client | `client/` |
+| Backend | Node.js, Express 5, Mongoose, Socket.IO, JWT, Multer, Helmet, rate limiting | `server/` |
+| Database | MongoDB through Mongoose | External MongoDB Atlas cluster |
+| AI | Google Generative AI SDK with configurable Gemini model | `server/controllers/ai.controller.js` |
+| Email | EmailJS REST API from the backend and EmailJS browser SDK where required | `server/services/`, `client/src/functions/` |
+| Production | Nginx, PM2, Ubuntu EC2 | `deployment/` and `DEPLOYMENT_GUIDE.md` |
 
-# 🔐 Authentication & Authorization
-
-The application uses **JWT-based authentication**.
-
-Passwords are securely hashed using **bcrypt** before being stored in MongoDB.
-
-Protected API routes verify the user's JWT before allowing access.
-
-Authorization is then controlled according to the user's role:
+## Repository structure
 
 ```text
-Admin
-   │
-   ├── Platform Administration
-   ├── Organization Approval
-   ├── Tender Moderation
-   └── Auction Moderation
-
-Organization
-   │
-   ├── Tender Management
-   ├── Proposal Submission
-   ├── Proposal Review
-   ├── Auction Management
-   └── Negotiation
-
-Individual
-   │
-   ├── Browse Auctions
-   ├── Place Bids
-   └── Track Auctions
+.
+├── client/                         React/Vite frontend
+│   ├── src/components/             Shared UI and layout components
+│   ├── src/functions/              API, authentication, formatting, and URL helpers
+│   ├── src/hooks/                  Reusable React hooks
+│   └── src/pages/                  Application screens
+├── server/                         Express backend
+│   ├── config/                     Database, JWT, upload, and seed configuration
+│   ├── controllers/                Request and business logic
+│   ├── models/                     Mongoose models
+│   ├── routes/                     API route modules
+│   ├── services/                   Email and other service integrations
+│   ├── uploads/                    Runtime upload directory, ignored by Git
+│   └── server.js                   Backend entry point
+├── deployment/                     Production server configuration
+├── information/                    Product requirements and engineering documentation
+├── .env.example                    Backend environment template
+├── client/.env.example             Frontend environment template
+├── DEPLOYMENT_GUIDE.md             Complete EC2 deployment and maintenance guide
+└── EmailJS_Templates_Guide.md      EmailJS template setup reference
 ```
 
----
+## Requirements
 
-# 📂 Project Structure
+Install the following before starting local development:
 
-```text
-ETEMAD/
-│
-├── client/
-│   ├── src/
-│   │   ├── assets/
-│   │   ├── components/
-│   │   ├── functions/
-│   │   ├── pages/
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── index.css
-│   │
-│   ├── package.json
-│   └── vite.config.js
-│
-├── server/
-│   ├── config/
-│   │   ├── jwt.config.js
-│   │   ├── mongoose.config.js
-│   │   ├── multer.config.js
-│   │   └── seed.js
-│   │
-│   ├── controllers/
-│   │   ├── admin.controller.js
-│   │   ├── ai.controller.js
-│   │   ├── auction.controller.js
-│   │   ├── auth.controller.js
-│   │   ├── chat.controller.js
-│   │   ├── negotiation.controller.js
-│   │   ├── proposal.controller.js
-│   │   ├── tender.controller.js
-│   │   └── user.controller.js
-│   │
-│   ├── models/
-│   │   ├── auction.model.js
-│   │   ├── bidHistory.model.js
-│   │   ├── bidProposal.model.js
-│   │   ├── chatRequest.model.js
-│   │   ├── negotiationMessage.model.js
-│   │   ├── tender.model.js
-│   │   └── user.model.js
-│   │
-│   ├── routes/
-│   │   ├── admin.routes.js
-│   │   ├── ai.routes.js
-│   │   ├── auction.routes.js
-│   │   ├── auth.routes.js
-│   │   ├── chat.routes.js
-│   │   ├── proposal.routes.js
-│   │   └── tender.routes.js
-│   │
-│   ├── services/
-│   ├── uploads/
-│   ├── socket.js
-│   ├── server.js
-│   └── package.json
-│
-├── information/
-│   ├── AGENTS.md
-│   ├── design.md
-│   ├── procurement-platform-srs.md
-│   ├── requirements.md
-│   └── SPRINT_PLAN.md
-│
-├── .env.example
-└── README.md
-```
+| Requirement | Purpose |
+|---|---|
+| Node.js LTS | Runs the frontend build and backend server |
+| npm | Installs dependencies and executes project scripts |
+| MongoDB Atlas or MongoDB | Stores users, tenders, proposals, auctions, bids, and messages |
+| Git | Clones the repository and manages updates |
+| Gemini API key | Enables the document-analysis features |
+| EmailJS service and templates | Enables verification and notification emails |
 
----
+## Getting started locally
 
-# 🚀 Getting Started
-
-## Prerequisites
-
-Before running the project, make sure you have installed:
-
-* Node.js 18+
-* npm
-* MongoDB or MongoDB Atlas
-* Git
-
-You will also need credentials for the external services used by the project if you want AI analysis and email functionality.
-
----
-
-## 1. Clone the Repository
+Clone the repository and enter its root directory:
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd ETEMAD
+git clone https://github.com/RamezAtallah-9r/etemad-mern-deployment.git
+cd etemad-mern-deployment
 ```
 
----
-
-## 2. Install Backend Dependencies
-
-```bash
-cd server
-npm install
-```
-
----
-
-## 3. Install Frontend Dependencies
-
-Open another terminal:
+Install frontend and backend dependencies from the committed lockfiles:
 
 ```bash
 cd client
-npm install
+npm ci
+
+cd ../server
+npm ci
+
+cd ..
 ```
 
----
-
-# ⚙️ Environment Variables
-
-Create your server environment configuration based on the provided `.env.example`.
-
-```env
-PORT=8000
-
-MONGOOSE_URI=your_mongodb_connection_string
-
-SECRET=your_jwt_secret
-
-CLIENT_ORIGIN=http://localhost:5173
-
-ADMIN_EMAIL=your_admin_email
-ADMIN_PASSWORD=your_admin_password
-
-GEMINI_API_KEY=your_gemini_api_key
-```
-
-Never commit real API keys, passwords, JWT secrets, or database credentials to GitHub.
-
----
-
-## EmailJS Configuration
-
-Create:
-
-```text
-client/.env.local
-```
-
-Then configure:
-
-```env
-VITE_EMAILJS_SERVICE_ID=your_service_id
-VITE_EMAILJS_TEMPLATE_ID=your_template_id
-VITE_EMAILJS_PUBLIC_KEY=your_public_key
-```
-
----
-
-# ▶️ Running the Application
-
-## Start the Backend
-
-From the `server` directory:
+Create the backend environment file at the **repository root**. The backend is configured to load `server.env` from this location:
 
 ```bash
+cp .env.example server.env
+```
+
+Create the frontend environment file:
+
+```bash
+cp client/.env.example client/.env.local
+```
+
+Edit both files and replace every placeholder. Never commit either real environment file.
+
+### Backend environment variables
+
+```dotenv
+PORT=8000
+MONGOOSE_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/DATABASE?retryWrites=true&w=majority
+SECRET=replace-with-a-long-random-jwt-secret
+CLIENT_ORIGIN=http://localhost:5173
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-3.5-flash-lite
+EMAILJS_SERVICE_ID=your-emailjs-service-id
+EMAILJS_PUBLIC_KEY=your-emailjs-public-key
+EMAILJS_PRIVATE_KEY=your-emailjs-private-key
+EMAILJS_VERIFICATION_TEMPLATE=template_ui7ifvr
+EMAILJS_GENERAL_TEMPLATE=template_w1mnjin
+```
+
+The exact variable names matter. This project uses `MONGOOSE_URI` and `SECRET`; `MONGO_URI` and `JWT_SECRET` will not be read by the current backend. Keep `SECRET` stable after users begin logging in because JWT tokens are signed with it.
+
+### Frontend environment variables
+
+For local development, use the backend origin:
+
+```dotenv
+VITE_API_URL=http://localhost:8000
+VITE_EMAILJS_SERVICE_ID=your-emailjs-service-id
+VITE_EMAILJS_TEMPLATE_ID=your-emailjs-template-id
+VITE_EMAILJS_PUBLIC_KEY=your-emailjs-public-key
+```
+
+For the production Nginx setup, set `VITE_API_URL=` to an empty value. The frontend will then use same-origin `/api`, `/uploads`, and `/socket.io` requests. Values prefixed with `VITE_` are included in the browser bundle, so never place private API keys or EmailJS private keys in the frontend environment file.
+
+### Start the application
+
+Open one terminal for the backend:
+
+```bash
+cd server
 npm start
 ```
 
-The API runs by default at:
-
-```text
-http://localhost:8000
-```
-
-You can verify the backend using:
-
-```text
-GET /api/health
-```
-
----
-
-## Start the Frontend
-
-From the `client` directory:
+The backend should report that it is running on port `8000` and has connected to MongoDB. Confirm its health endpoint:
 
 ```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+The expected response is:
+
+```json
+{"message":"backend is healthy"}
+```
+
+Open a second terminal for the frontend:
+
+```bash
+cd client
 npm run dev
 ```
 
-The frontend runs by default at:
+Open the Vite URL shown in the terminal, normally `http://localhost:5173`.
 
-```text
-http://localhost:5173
+## Available scripts
+
+### Frontend
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the Vite development server |
+| `npm run build` | Create the production bundle in `client/dist` |
+| `npm run preview` | Preview the production bundle locally |
+| `npm run lint` | Run Oxlint |
+
+### Backend
+
+| Command | Purpose |
+|---|---|
+| `npm start` | Start Express with `server.js` |
+| `npm test` | Placeholder test script; automated backend tests are not currently configured |
+
+## AI document analysis
+
+The backend uses the Gemini model configured by `GEMINI_MODEL`. The current free-friendly default is:
+
+```dotenv
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
----
+The AI endpoints accept supported proposal, identity, tender-book, and auction-item files according to the validation in the backend. The application requests JSON responses and validates the returned shape before saving analysis results. AI features require a valid `GEMINI_API_KEY`; if the key is unavailable or the model quota is exhausted, users can continue certain workflows manually where the interface supports it.
 
-# 🌐 Main API Modules
+## EmailJS configuration
 
-The backend is organized into dedicated API modules.
+The backend sends EmailJS messages through the REST API. Configure the following values in `server.env`:
 
-```text
-/api/auth
-/api/admin
-/api/tenders
-/api/proposals
-/api/ai
-/api/auctions
-/api/chat
+```dotenv
+EMAILJS_SERVICE_ID=...
+EMAILJS_PUBLIC_KEY=...
+EMAILJS_PRIVATE_KEY=...
+EMAILJS_VERIFICATION_TEMPLATE=template_ui7ifvr
+EMAILJS_GENERAL_TEMPLATE=template_w1mnjin
 ```
 
-Each module is separated into routes, controllers, models, and supporting services where appropriate.
+The General template should use `{{to_email}}` in **To Email**, `{{email_subject}}` in **Subject**, and the dynamic variables documented in `EmailJS_Templates_Guide.md`. Keep **From Email** empty when **Use Default Email Address** is enabled. The corrected HTML template is available in `EmailJS_General_Template_FIXED.html`.
 
----
+## Production deployment
 
-# 🗄️ Main Data Models
-
-The MongoDB database contains models covering the major platform workflows.
-
-### User
-
-Stores:
-
-* Account information
-* Authentication information
-* User role
-* Organization details
-* Verification status
-
-### Tender
-
-Stores procurement opportunities created by organizations.
-
-### Bid Proposal
-
-Stores organization proposals submitted against tenders.
-
-### Auction
-
-Stores auction details, status, pricing, deadlines, and related information.
-
-### Bid History
-
-Maintains bidding activity associated with auctions.
-
-### Chat Request
-
-Controls negotiation communication requests between organizations.
-
-### Negotiation Message
-
-Stores messages exchanged during negotiation.
-
----
-
-# 🛡️ Security
-
-Security is an important part of ETEMAD's architecture.
-
-The backend implements:
-
-* JWT authentication
-* bcrypt password hashing
-* Role-based authorization
-* CORS restrictions
-* Helmet security headers
-* API rate limiting
-* Server-side validation
-* Controlled file uploads
-* File-size restrictions
-* File-type validation
-* Protected API endpoints
-* Environment-based secret management
-
-Uploaded documents are restricted to supported file types and a maximum configured file size.
-
----
-
-# 📎 File Uploads
-
-ETEMAD uses **Multer** for handling uploaded documents.
-
-Supported files include:
+The recommended EC2 deployment uses the following path:
 
 ```text
-JPG
-JPEG
-PNG
-PDF
+GitHub → Ubuntu EC2 → Nginx → React static files
+                         └────── Express + Socket.IO through PM2
 ```
 
-Maximum upload size:
+Read [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for the complete workflow, including EC2 creation, security-group rules, SSH, MongoDB Atlas access, environment files, dependency installation, Nginx, PM2, HTTPS, updates, rollback, and troubleshooting.
+
+The ready-to-copy Nginx configuration is [deployment/nginx-etemad.conf](./deployment/nginx-etemad.conf). It proxies all three backend-dependent paths:
 
 ```text
-5 MB
+/api/       REST API
+/uploads/   Uploaded images and documents
+/socket.io/ Real-time chat and WebSocket upgrades
 ```
 
-Uploads can be used for:
+Do not expose port `8000` publicly in the AWS security group. Nginx should be the public entry point.
 
-* Organization verification documents
-* Tender/proposal documents
-* Auction images
-* Supporting documentation
+## Updating the live server
 
----
+Push source changes from your development computer:
 
-# 📧 Notifications
-
-EmailJS is used to provide user notifications for important platform events, including:
-
-* Organization approval
-* Organization rejection
-* Proposal status changes
-* Auction-related notifications
-* Winner notifications
-
-Database state remains the source of truth; failure to send an email does not reverse the underlying platform operation.
-
----
-
-# 🎨 UI / UX
-
-ETEMAD uses a responsive interface designed around reusable React components.
-
-The frontend contains shared components for:
-
-* Navigation
-* Sidebars
-* Cards
-* Forms
-* Tables
-* Pagination
-* Dialogs
-* Status indicators
-* File uploads
-* Loading states
-* Error states
-* Countdown timers
-* Confidence indicators
-* Responsive layouts
-* Role-based navigation
-
-The interface also supports the Arabic-first direction and design requirements of the platform.
-
----
-
-# 📊 Dashboards
-
-The system provides different dashboards depending on the authenticated user's role.
-
-### Admin Dashboard
-
-Focused on:
-
-* Platform administration
-* User management
-* Organization verification
-* Tender moderation
-* Auction moderation
-
-### Organization Dashboard
-
-Focused on:
-
-* Tender activity
-* Proposals
-* Auctions
-* Reports
-* Organization profile
-* Negotiations
-
-### Individual Dashboard
-
-Focused on:
-
-* Available auctions
-* Bidding activity
-* Personal auction participation
-
----
-
-# 🔄 Core Tender Workflow
-
-```text
-Organization
-     │
-     ▼
-Create Tender
-     │
-     ▼
-Publish Tender
-     │
-     ▼
-Other Organizations
-Browse Tender
-     │
-     ▼
-Upload Proposal
-     │
-     ▼
-Gemini AI Analysis
-     │
-     ▼
-Extracted Information
-+ Confidence Score
-     │
-     ▼
-Submit Proposal
-     │
-     ▼
-Tender Owner Reviews
-     │
-   ┌─┴────────────┐
-   ▼              ▼
-Accept          Reject
-   │
-   ▼
-Negotiation
+```bash
+git add .
+git commit -m "Describe the change"
+git push origin main
 ```
 
----
+On EC2, pull the new commit:
 
-# 🔨 Core Auction Workflow
-
-```text
-Organization / Admin
-        │
-        ▼
-   Create Auction
-        │
-        ▼
-    Admin Review
-        │
-        ▼
-  Auction Published
-        │
-        ▼
-Individuals Browse
-        │
-        ▼
-     Place Bids
-        │
-        ▼
- Current Price Updates
-        │
-        ▼
- Auction Deadline
-        │
-        ▼
- Highest Valid Bid
-        │
-        ▼
-      Winner
+```bash
+cd ~/etemad-mern-deployment
+git pull --ff-only origin main
 ```
 
----
+For frontend changes, rebuild and copy the generated files:
 
-# 🧠 Design Philosophy
+```bash
+cd client
+npm ci
+npm run build
+sudo rm -rf /var/www/html/*
+sudo cp -r dist/. /var/www/html/
+sudo chown -R www-data:www-data /var/www/html
+```
 
-ETEMAD is built around four principles:
+For backend changes, reinstall dependencies if `package.json` changed and restart PM2:
 
-**Transparency** — procurement opportunities and auction information are presented through a centralized platform.
+```bash
+cd server
+npm ci --omit=dev
+pm2 restart etemad-api --update-env
+```
 
-**Efficiency** — organizations can manage procurement workflows digitally instead of relying on fragmented manual processes.
+Keep `server.env`, `client/.env.local`, and runtime uploads on the server. They are intentionally excluded from Git.
 
-**Intelligence** — AI assists with understanding and evaluating proposal documents.
+## Security notes
 
-**Accessibility** — organizations and individuals receive role-specific interfaces designed around their actual tasks.
+The repository’s ignore rules exclude real environment files, dependencies, build output, runtime logs, and uploaded files. Review `git status` before every commit. If a secret is ever committed, rotate it immediately and remove it from the repository history.
 
----
+Restrict MongoDB Atlas network access to the EC2 public IP using a `/32` entry whenever possible. Keep SSH restricted to **My IP**, allow public HTTP/HTTPS only, and do not open the internal Express port. Use strong values for `SECRET`, `ADMIN_PASSWORD`, and database credentials.
 
-# 🗺️ Future Improvements
+Uploaded files are stored on the server filesystem. For a serious production deployment, add a backup strategy and consider moving uploads to object storage such as Amazon S3. The current deployment is suitable for a small application or demonstration but does not yet provide high availability, automated CI/CD, or distributed file storage.
 
-Potential future development includes:
+## Troubleshooting
 
-* Advanced AI proposal scoring
-* AI comparison between multiple proposals
-* AI-generated procurement recommendations
-* AI-assisted contract generation
-* Advanced analytics
-* Complete audit logging
-* Cloud-based document storage
-* Push notifications
-* SMS notifications
-* Payment gateway integration
-* Multi-currency support
-* Advanced organization verification
-* Digital signatures
-* Enhanced real-time bidding
-* Mobile application
-* Arabic/English language switching
-* Production deployment and CI/CD
+| Problem | First check |
+|---|---|
+| Frontend calls `localhost` in production | Set empty `VITE_API_URL`, rebuild the frontend, and copy the new `dist` files to Nginx |
+| Nginx returns `502 Bad Gateway` | Check `pm2 status`, `pm2 logs etemad-api`, and `curl http://127.0.0.1:8000/api/health` |
+| React route refresh returns 404 | Confirm Nginx contains `try_files $uri $uri/ /index.html;` |
+| Chat does not connect | Confirm Nginx proxies `/socket.io/` with HTTP/1.1 `Upgrade` and `Connection` headers |
+| Images or documents fail | Confirm Nginx proxies `/uploads/` and the `server/uploads` directory exists |
+| MongoDB connection fails | Check `MONGOOSE_URI`, the Atlas database user, and the Atlas IP access list |
+| Approval email fails | Check the General template ID, the EmailJS template settings, and remove unsupported `{{#if ...}}` syntax |
+| `vite: Permission denied` | Delete `node_modules` and run `npm ci` again instead of copying archived dependencies |
 
----
+## Documentation
 
-# 👨‍💻 Development Team
+The `information/` directory contains product requirements, design rules, engineering conventions, sprint documents, and the project specification used during development. The main deployment reference is [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).
 
-ETEMAD was developed as a collaborative MERN Stack project by:
+## License
 
-* **Chaker Ibrahem**
-* **Ramez Atallah**
-* **Jalil Wasaya**
-* **Hosni Ahmad**
+No open-source license has been added to this repository yet. Unless a license is added, the project should be treated as **all rights reserved** by its owner.
 
----
+## Acknowledgements
 
-# 🎓 Project Context
-
-ETEMAD was developed as a **Full-Stack MERN project**, demonstrating practical implementation of:
-
-* Full-stack web development
-* RESTful API design
-* React component architecture
-* MongoDB data modeling
-* Authentication and authorization
-* Role-based access control
-* File management
-* Artificial Intelligence integration
-* Real-time communication
-* Responsive UI/UX
-* Security practices
-* External service integration
-
----
-
-# 📜 License
-
-This project was developed for educational and demonstration purposes.
-
-Please contact the development team before using the project for commercial purposes.
-
----
-
-<div align="center">
-
-## اعتماد | ETEMAD
-
-### Smarter Procurement. Transparent Opportunities. Better Decisions.
-
-**Built with MongoDB • Express.js • React • Node.js • Gemini AI**
-
-</div>
+This project uses [React](https://react.dev/), [Vite](https://vite.dev/), [Express](https://expressjs.com/), [MongoDB](https://www.mongodb.com/), [Socket.IO](https://socket.io/), [Google Generative AI](https://ai.google.dev/), and [EmailJS](https://www.emailjs.com/).
