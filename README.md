@@ -69,6 +69,20 @@ Browser
 └── EmailJS_Templates_Guide.md      EmailJS template setup reference
 ```
 
+## Quality and operations
+
+The repository includes focused documentation for maintainers and reviewers:
+
+| Document | Purpose |
+|---|---|
+| [`docs/API.md`](docs/API.md) | Route reference, access rules, upload fields, and response conventions |
+| [`docs/TESTING.md`](docs/TESTING.md) | Backend and frontend test commands and validation scope |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | EC2 deployment, health checks, updates, rollback, and logs |
+| [`scripts/ec2-health-check.sh`](scripts/ec2-health-check.sh) | Automated PM2, Nginx, backend, and proxy health check |
+| [`.github/workflows/quality.yml`](.github/workflows/quality.yml) | Continuous integration for tests, lint, and production build |
+
+The current quality branch also contains regression coverage for authentication validation, ownership authorization, upload policy, AI response handling, EmailJS payloads, rate limits, API errors, auction expiry, role routing, client error extraction, and client utility behavior.
+
 ## Requirements
 
 Install the following before starting local development:

@@ -1,5 +1,6 @@
 const BidProposal = require('../models/bidProposal.model');
 const Tender = require('../models/tender.model');
+const { ALLOWED_MIME_TYPES } = require('../config/upload-types');
 
 /**
  * Submits a new proposal for a specific tender.
@@ -33,7 +34,7 @@ module.exports.submitProposal = async (req, res, next) => {
             const { fileTypeFromFile } = await import('file-type');
             const type = await fileTypeFromFile(req.file.path);
 
-            const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            const allowedMimeTypes = ALLOWED_MIME_TYPES;
             if (!type || !allowedMimeTypes.includes(type.mime)) {
                 const fs = require('fs');
                 fs.unlinkSync(req.file.path);

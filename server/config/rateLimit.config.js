@@ -66,4 +66,11 @@ const messageLimiter = rateLimit({
   ),
 });
 
-module.exports = { globalLimiter, authLimiter, bidLimiter, messageLimiter };
+module.exports = {
+  globalLimiter,
+  authLimiter,
+  bidLimiter,
+  messageLimiter,
+  number,
+  WINDOW_MS
+};

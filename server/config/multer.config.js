@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { isAllowedMimeType } = require('./upload-types');
 
 /**
  * multer.config.js
@@ -13,7 +14,6 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -26,7 +26,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    if (isAllowedMimeType(file.mimetype)) {
         cb(null, true);
     } else {
         const err = new multer.MulterError('LIMIT_UNEXPECTED_FILE');
