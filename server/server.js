@@ -10,6 +10,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config({ path: path.resolve(__dirname, '../server.env'), override: true });
 const { reportEnvironment } = require('./config/env.config');
+const { formatErrorResponse } = require('./config/error-response');
 reportEnvironment();
 require('./config/mongoose.config');
 
@@ -59,29 +60,9 @@ require('./routes/chat.routes')(app);
 // Catches all forwarded errors and formats them into a consistent JSON response.
 // Does not return or throw; ends the request with an appropriate HTTP status.
 app.use((err, req, res, next) => {
-    if (err.type === 'entity.parse.failed' || err.status === 400) {
-        return res.status(400).json({ errors: { body: "صيغة البيانات المرسلة غير صحيحة" } });
-    }
-    if (err.name === 'CastError' && err.kind === 'ObjectId') {
-        return res.status(404).json({ error: "العنصر غير موجود" });
-    }
-    if (err.name === 'ValidationError') {
-        const errors = {};
-        for (let field in err.errors) {
-            errors[field] = err.errors[field].message;
-        }
-        return res.status(400).json({ errors });
-    }
-    if (err.name === 'MulterError') {
-        let msg = err.message;
-        if (err.code === 'LIMIT_FILE_SIZE' || err.message === 'File too large') msg = 'حجم الملف يتجاوز الحد الأقصى (5 ميجابايت)';
-        if (err.code === 'LIMIT_UNEXPECTED_FILE' && err.field === 'proofDocument') msg = err.message; // From our custom filter
-        else if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = 'الملف غير مدعوم، يرجى رفع صورة أو ملف PDF'; // Fallback
-
-        return res.status(400).json({ errors: { file: msg } });
-    }
-    console.error(err);
-    res.status(500).json({ error: "حدث خطأ غير متوقع في الخادم" });
+    const result = formatErrorResponse(err);
+    if (result.shouldLog) console.error(err);
+    return res.status(result.status).json(result.body);
 });
 
 const PORT = process.env.PORT || 8000;
