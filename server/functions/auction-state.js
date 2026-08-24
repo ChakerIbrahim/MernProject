@@ -1,9 +1,15 @@
 const { sendEmail } = require('../services/email.service');
 const User = require('../models/user.model');
 
+const shouldEndAuction = (auction, now = new Date()) => (
+    Boolean(auction)
+    && auction.status === 'active'
+    && new Date(auction.endsAt) <= now
+);
+
 const resolveAuctionState = async (auction) => {
     if (!auction) return null;
-    if (auction.status === 'active' && new Date(auction.endsAt) <= new Date()) {
+    if (shouldEndAuction(auction)) {
         auction.status = 'ended';
         await auction.save();
 
@@ -61,4 +67,4 @@ const resolveAuctionState = async (auction) => {
     return auction;
 };
 
-module.exports = { resolveAuctionState };
+module.exports = { resolveAuctionState, shouldEndAuction };
