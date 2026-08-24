@@ -1,12 +1,14 @@
 import PropTypes from 'prop-types';
 
 export default function FileUploadField({ id, label, accept, hint, error, onChange }) {
+  const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
+  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="mb-4">
       <label htmlFor={id} className="block mb-1 text-sm font-medium text-ink">{label}</label>
-      {hint && <p className="mb-2 text-xs text-text-secondary">{hint}</p>}
+      {hint && <p id={hintId} className="mb-2 text-xs text-text-secondary">{hint}</p>}
       <div className={`relative flex items-center justify-center w-full rounded-xl border-2 border-dashed p-6 transition-colors focus-within:ring-1 focus-within:ring-registry-green focus-within:ring-offset-1 ${error ? 'border-error bg-red-50/50' : 'border-ink/20 bg-paper hover:bg-surface'}`}>
         <input
           id={id}
@@ -14,7 +16,7 @@ export default function FileUploadField({ id, label, accept, hint, error, onChan
           accept={accept}
           onChange={onChange}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={describedBy}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
         <div className="text-center">
