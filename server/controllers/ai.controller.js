@@ -498,6 +498,10 @@ module.exports.analyzeAuctionItem = async (req, res, next) => {
  * Expects proposalId in req.params. Saves and returns the resulting aiExtractedData.
  * Restricted to the tender owner or an admin. Returns 502 on AI failure.
  */
+module.exports.parseGeminiJson = parseGeminiJson;
+module.exports.getAiFailureCode = getAiFailureCode;
+module.exports.normalizeConfidenceScore = normalizeConfidenceScore;
+
 module.exports.analyzeExistingProposal = async (req, res, next) => {
     try {
         const BidProposal = require('../models/bidProposal.model');
