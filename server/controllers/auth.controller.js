@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { sendEmail } = require('../services/email.service');
 const { ALLOWED_MIME_TYPES } = require('../config/upload-types');
+const { validateRegistrationInput } = require('../functions/auth-validation');
 
 /**
  * Handles initial registration for both organizations and individuals.
@@ -19,26 +20,14 @@ module.exports.register = async (req, res, next) => {
         }
 
         const { name, password, phoneNumber } = req.body;
-        const validationErrors = {};
-        const nameRegex = /^[\p{L}\s]{3,}$/u;
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const phoneRegex = /^\+?[0-9\s-]{7,15}$/;
-
-        if (!name || !nameRegex.test(String(name).trim())) {
-            validationErrors.name = "يجب أن يتكون الاسم من 3 أحرف على الأقل ولا يحتوي على أرقام أو رموز";
-        }
-        if (!email || !emailRegex.test(String(email).trim())) {
-            validationErrors.email = "أدخل بريداً إلكترونياً صالحاً";
-        }
-        if (!password || password.length < 8) {
-            validationErrors.password = "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل";
-        }
-        if (!phoneNumber || !phoneRegex.test(String(phoneNumber).trim())) {
-            validationErrors.phoneNumber = "رقم الهاتف غير صالح أو مفقود";
-        }
-        if (role === 'individual' && !req.file) {
-            validationErrors.file = "مستند الهوية الوطنية مطلوب";
-        }
+        const validationErrors = validateRegistrationInput({
+            role,
+            name,
+            email,
+            password,
+            phoneNumber,
+            hasFile: Boolean(req.file)
+        });
         if (Object.keys(validationErrors).length > 0) {
             return res.status(400).json({ errors: validationErrors });
         }
