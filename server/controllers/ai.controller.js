@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
+const { ALLOWED_MIME_TYPES } = require('../config/upload-types');
 const pdfParse = require('pdf-parse');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -57,7 +58,7 @@ function normalizeConfidenceScore(value) {
 async function analyzeProposalFile(filePath, mimeType, tender) {
     const { fileTypeFromFile } = await import('file-type');
     const detectedType = await fileTypeFromFile(filePath);
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    const allowedMimeTypes = ALLOWED_MIME_TYPES;
     if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
         throw new Error('FILE_INVALID');
     }
@@ -238,7 +239,7 @@ module.exports.analyzeIdDocument = async (req, res, next) => {
         }
         const { fileTypeFromFile } = await import('file-type');
         const detectedType = await fileTypeFromFile(req.file.path);
-        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+        const allowedTypes = ALLOWED_MIME_TYPES;
         if (!detectedType || !allowedTypes.includes(detectedType.mime)) {
             safeUnlink(req.file.path);
             return res.status(400).json({ error: 'صيغة مستند الهوية غير مدعومة. ارفع PDF أو JPG أو PNG' });
@@ -290,7 +291,7 @@ module.exports.analyzeTenderBook = async (req, res, next) => {
 
         const { fileTypeFromFile } = await import('file-type');
         const detectedType = await fileTypeFromFile(req.file.path);
-        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        const allowedMimeTypes = ALLOWED_MIME_TYPES;
         if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
             safeUnlink(req.file.path);
             return res.status(400).json({ errors: { officialBook: 'الملف غير مدعوم، يرجى رفع PDF أو JPG أو PNG' } });
@@ -391,7 +392,7 @@ module.exports.analyzeAuctionItem = async (req, res, next) => {
 
         const { fileTypeFromFile } = await import('file-type');
         const detectedType = await fileTypeFromFile(req.file.path);
-        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        const allowedMimeTypes = ALLOWED_MIME_TYPES;
         if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
             safeUnlink(req.file.path);
             return res.status(400).json({ errors: { officialDocument: 'الملف غير مدعوم، يرجى رفع PDF أو JPG أو PNG' } });

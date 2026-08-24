@@ -3,6 +3,7 @@ const TemporaryUser = require('../models/temporaryUser.model');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { sendEmail } = require('../services/email.service');
+const { ALLOWED_MIME_TYPES } = require('../config/upload-types');
 
 /**
  * Handles initial registration for both organizations and individuals.
@@ -52,7 +53,7 @@ module.exports.register = async (req, res, next) => {
                 const { fileTypeFromFile } = await import('file-type');
                 const type = await fileTypeFromFile(req.file.path);
 
-                const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+                const allowedMimeTypes = ALLOWED_MIME_TYPES;
                 if (!type || !allowedMimeTypes.includes(type.mime)) {
                     // Delete the invalid file
                     const fs = require('fs');

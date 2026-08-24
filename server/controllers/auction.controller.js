@@ -3,9 +3,10 @@ const mongoose = require('mongoose');
 const Auction = require('../models/auction.model');
 const BidHistory = require('../models/bidHistory.model');
 const { resolveAuctionState } = require('../functions/auction-state');
+const { ALLOWED_IMAGE_MIME_TYPES, ALLOWED_MIME_TYPES } = require('../config/upload-types');
 
-const allowedImageMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-const allowedDocumentMimeTypes = [...allowedImageMimeTypes, 'application/pdf'];
+const allowedImageMimeTypes = ALLOWED_IMAGE_MIME_TYPES;
+const allowedDocumentMimeTypes = ALLOWED_MIME_TYPES;
 
 const withTimeRemaining = (auction) => {
     const item = auction.toObject ? auction.toObject() : auction;
