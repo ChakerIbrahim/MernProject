@@ -1,298 +1,536 @@
-const fs = require("fs");
-const path = require("path");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const BidProposal = require("../models/bidProposal.model");
-const Tender = require("../models/tender.model");
-const { UPLOAD_DIR } = require("../config/multer.config");
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const fs = require('fs');
+const path = require('path');
+const pdfParse = require('pdf-parse');
 
-// C-7 / NFR-M4: this is the ONLY file permitted to import the Gemini SDK.
-// Everything else calls analyzeProposalDocument. If a second file imports
-// @google/generative-ai, the constraint is broken.
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const AI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
-const ANALYSIS_TIMEOUT_MS = 18000;
-const MAX_SUMMARY_LENGTH = 2000;
+function safeUnlink(filePath) {
+    if (filePath && fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+    }
+}
 
-const MIME_BY_EXTENSION = {
-  ".pdf": "application/pdf",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-};
+function parseGeminiJson(rawText) {
+    const cleaned = String(rawText || '')
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
 
-const CONTRACT_PROMPT = [
-  "أنت مساعد قانوني لصياغة مسودات عقود التوريد بالعربية الفصحى.",
-  "اكتب مسودة عقد أولية بين الطرفين بناءً على البيانات التالية فقط.",
-  "لا تخترع أطرافاً أو بنوداً مالية غير مذكورة. اذكر البنود الأساسية:",
-  "الأطراف، موضوع العقد، القيمة، مدة التنفيذ، والالتزامات العامة.",
-  "أعد النص فقط، بدون مقدمة وبدون علامات markdown.",
-].join("\n");
+    try {
+        return JSON.parse(cleaned);
+    } catch (error) {
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            throw new Error('AI_INVALID_JSON');
+        }
+        try {
+            return JSON.parse(cleaned.slice(start, end + 1));
+        } catch (nestedError) {
+            throw new Error('AI_INVALID_JSON');
+        }
+    }
+}
 
-const PROMPT = [
-  "أنت مساعد لتحليل مستندات العروض في منصة مشتريات.",
-  "استخرج من المستند المرفق: السعر الإجمالي، وملخصاً قصيراً بالعربية، ودرجة ثقتك.",
-  "أجب بكائن JSON فقط، بدون أي نص إضافي وبدون علامات markdown:",
-  '{"extractedPrice": <رقم>, "summary": "<ملخص قصير بالعربية>", "confidenceScore": <رقم بين 0 و 100>}',
-].join("\n");
+function getAiFailureCode(error) {
+    const message = String(error?.message || '').toLowerCase();
+    const status = Number(error?.status || error?.response?.status || 0);
 
-/** Guarantees the API key can never appear in a log line. */
-const redact = (value) => {
-  const key = process.env.GEMINI_API_KEY;
-  const text = String(value);
-  return key ? text.split(key).join("[redacted]") : text;
-};
+    if (message === 'ai_timeout') return 'AI_TIMEOUT';
+    if (message === 'ai_invalid_json') return 'AI_INVALID_JSON';
+    if (message === 'ai_invalid_response') return 'AI_INVALID_RESPONSE';
+    if (status === 401 || status === 403 || /api key|permission|unauthori[sz]ed|forbidden/.test(message)) return 'AI_AUTH_ERROR';
+    if (status === 404 || /model.*(not found|unavailable)|no longer available/.test(message)) return 'AI_MODEL_UNAVAILABLE';
+    if (status === 429 || /quota|rate limit|too many requests/.test(message)) return 'AI_RATE_LIMIT';
+    return 'AI_PROVIDER_ERROR';
+}
 
-/**
- * FR-10.4 / NFR-R1 — every failure in this module becomes one 502 carrying a
- * calm Arabic message. 502 rather than 400 tells the client the upstream failed
- * and the manual path should be offered, instead of blaming the user's input.
- */
-const ANALYSIS_UNAVAILABLE = "تعذّر تحليل المستند تلقائياً. يمكنك إدخال البيانات يدوياً.";
-const CONTRACT_UNAVAILABLE = "تعذّر إنشاء مسودة العقد تلقائياً. يمكنك المتابعة عبر المحادثة أو المحاولة لاحقاً.";
+function normalizeConfidenceScore(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    const percentage = number > 0 && number <= 1 ? number * 100 : number;
+    return Math.max(0, Math.min(100, percentage));
+}
 
-const aiUnavailable = (reason, message = ANALYSIS_UNAVAILABLE) => {
-  const err = new Error(message);
-  err.status = 502;
-  err.expose = true;
-  err.aiReason = reason;
-  return err;
-};
+async function analyzeProposalFile(filePath, mimeType, tender) {
+    const { fileTypeFromFile } = await import('file-type');
+    const detectedType = await fileTypeFromFile(filePath);
+    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
+        throw new Error('FILE_INVALID');
+    }
 
-const withTimeout = (promise, ms) => {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error("gemini call timed out")), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-};
+    const priorityFields = Array.isArray(tender.priorityFields) ? tender.priorityFields : [];
+    const customFields = Array.isArray(tender.customFields) ? tender.customFields : [];
+    const requirements = [
+        { key: 'title', label: 'عنوان العطاء', value: tender.title, priority: priorityFields.includes('title') },
+        { key: 'description', label: 'وصف العطاء', value: tender.description, priority: priorityFields.includes('description') },
+        { key: 'category', label: 'الفئة', value: tender.category, priority: priorityFields.includes('category') },
+        { key: 'budgetEstimate', label: 'الميزانية التقديرية', value: tender.budgetEstimate ?? 'غير محدد', priority: priorityFields.includes('budgetEstimate') },
+        { key: 'deadline', label: 'الموعد النهائي', value: tender.deadline, priority: priorityFields.includes('deadline') },
+        ...customFields.map((field) => ({
+            key: field.key,
+            label: field.label,
+            value: field.value,
+            priority: Boolean(field.isPriority)
+        }))
+    ];
 
-/** Models add ``` fences whatever the prompt says. Take the outermost object. */
-const extractJson = (raw) => {
-  const text = String(raw ?? "").replace(/```(?:json)?/gi, "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end < start) return null;
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    // A malformed response is an AI failure, not a crash.
-    return null;
-  }
-};
+    const prompt = `
+أنت مراجع عروض متخصص لمنصة اعتماد الفلسطينية. اقرأ مستند العرض المرفق وقارنه بمتطلبات العطاء التالية. أعد JSON صالحاً فقط دون Markdown.
 
-/** Never trust the model's numbers — check shape and range before storing. */
-const validateExtraction = (data) => {
-  if (!data || typeof data !== "object") return null;
+متطلبات العطاء:
+${JSON.stringify(requirements, null, 2)}
 
-  const extractedPrice = Number(data.extractedPrice);
-  const confidenceScore = Number(data.confidenceScore);
-  const summary = typeof data.summary === "string" ? data.summary.trim() : "";
+الحقول التي حددتها الجهة الطارحة كأولوية يجب أن يكون لها وزن أعلى في التقييم:
+${JSON.stringify(requirements.filter((field) => field.priority), null, 2)}
 
-  if (!Number.isFinite(extractedPrice) || extractedPrice < 0) return null;
-  if (!Number.isFinite(confidenceScore) || confidenceScore < 0 || confidenceScore > 100) return null;
-  if (!summary) return null;
+لا تخترع معلومات غير موجودة في مستند العرض. قيّم مدى مطابقة العرض للمتطلبات، وميّز بوضوح بين المعلومات الموجودة والمعلومات غير الموجودة. أعد الشكل التالي:
+{
+  "extractedPrice": null,
+  "summary": "ملخص عربي موجز للعرض",
+  "overallScore": 0,
+  "confidenceScore": 0,
+  "priorityAssessment": [{"key":"مفتاح الحقل","label":"اسم الحقل","score":0,"status":"مطابق|جزئي|غير موجود|غير مطابق","evidence":"دليل موجز من العرض"}],
+  "strengths": ["نقطة قوة"],
+  "gaps": ["نقص أو مخاطرة"]
+}
 
-  return {
-    extractedPrice,
-    summary: summary.slice(0, MAX_SUMMARY_LENGTH),
-    confidenceScore: Math.round(confidenceScore),
-  };
-};
+overallScore و score أرقام من 0 إلى 100. احسب overallScore مع إعطاء الحقول ذات priority=true وزناً أعلى، ولا تعتبر غياب الدليل تطابقاً. confidenceScore هو ثقتك في قراءة مستند العرض، وليس درجة العرض.`;
 
-/**
- * Sends a stored proposal document to Gemini and returns validated data.
- * Throws a 502 error on any failure — missing key, unreadable file, timeout,
- * unparseable response, or values outside the permitted range.
- *
- * Never logs the document contents or the API key (AGENTS.md §5).
- *
- * @param {string} storedUrl e.g. "/uploads/1787…-ab.pdf"
- */
-const analyzeProposalDocument = async (storedUrl) => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw aiUnavailable("GEMINI_API_KEY is not configured");
-  }
-
-  const filePath = path.join(UPLOAD_DIR, path.basename(String(storedUrl || "")));
-  const mimeType = MIME_BY_EXTENSION[path.extname(filePath).toLowerCase()];
-
-  if (!mimeType) throw aiUnavailable("unsupported document type");
-
-  let data;
-  try {
-    data = fs.readFileSync(filePath).toString("base64");
-  } catch {
-    throw aiUnavailable("stored document could not be read");
-  }
-
-  let raw;
-  try {
-    const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({
-      model: MODEL_NAME,
+    const model = genAI.getGenerativeModel({
+        model: AI_MODEL,
+        generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.1,
+            maxOutputTokens: 8000
+        }
     });
-    const result = await withTimeout(
-      model.generateContent([{ inlineData: { mimeType, data } }, PROMPT]),
-      ANALYSIS_TIMEOUT_MS
-    );
-    raw = result.response.text();
-  } catch (err) {
-    // Re-thrown as our own error so no SDK object — and no key — escapes.
-    throw aiUnavailable(redact(err.message).slice(0, 200));
-  }
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 90000));
+    const result = await Promise.race([
+        model.generateContent([prompt, { inlineData: { data: Buffer.from(fs.readFileSync(filePath)).toString('base64'), mimeType: detectedType.mime } }]),
+        timeoutPromise
+    ]);
+    const parsed = parseGeminiJson((await result.response).text());
+    if (!parsed || !Number.isFinite(Number(parsed.overallScore)) || !Array.isArray(parsed.priorityAssessment)) {
+        throw new Error('AI_INVALID_RESPONSE');
+    }
 
-  const extracted = validateExtraction(extractJson(raw));
-  if (!extracted) throw aiUnavailable("model returned an unusable payload");
+    return {
+        extractedPrice: parsed.extractedPrice === null || parsed.extractedPrice === undefined ? null : Number(parsed.extractedPrice),
+        summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : '',
+        overallScore: Math.max(0, Math.min(100, Number(parsed.overallScore))),
+        confidenceScore: normalizeConfidenceScore(parsed.confidenceScore),
+        priorityAssessment: parsed.priorityAssessment.slice(0, 30),
+        strengths: Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 10) : [],
+        gaps: Array.isArray(parsed.gaps) ? parsed.gaps.slice(0, 10) : [],
+        analyzedAt: new Date().toISOString()
+    };
+}
 
-  return extracted;
+
+
+
+/**
+ * Analyzes an uploaded business proposal document to extract price and summary.
+ * Expects a file in req.file. Returns JSON with aiExtractedData.
+ * Returns 502 if the AI fails, preserving the uploaded file for manual entry.
+ */
+module.exports.analyzeDocument = async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "لم يتم العثور على ملف للتحليل" });
+        }
+
+        const filePath = req.file.path;
+        let filePart = null;
+
+        const ext = path.extname(filePath).toLowerCase();
+        if (['.pdf', '.jpg', '.jpeg', '.png'].includes(ext)) {
+            filePart = {
+                inlineData: {
+                    data: Buffer.from(fs.readFileSync(filePath)).toString("base64"),
+                    mimeType: req.file.mimetype
+                },
+            };
+        } else {
+            return res.status(400).json({ error: "نوع الملف غير مدعوم للتحليل" });
+        }
+
+        const prompt = `
+        Analyze this business proposal document.
+        Extract the following information and return ONLY a valid JSON object. Do not include markdown formatting, code blocks, or any other text.
+
+        {
+            "extractedPrice": <number, the total proposed price or budget. If not found, use null>,
+            "summary": "<string, a brief Arabic summary of the proposal's main points>",
+            "confidenceScore": <number, 0-100 indicating how confident you are in this extraction>
+        }
+        `;
+
+        const model = genAI.getGenerativeModel({ model: AI_MODEL });
+
+        const content = [prompt, filePart];
+
+        // Apply timeout
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('AI_TIMEOUT')), 15000)
+        );
+
+        const aiPromise = model.generateContent(content);
+
+        const result = await Promise.race([aiPromise, timeoutPromise]);
+        const response = await result.response;
+        let text = response.text();
+
+        // Strip markdown fences if present
+        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        let parsed;
+        try {
+            parsed = JSON.parse(text);
+        } catch (e) {
+            console.error("Failed to parse Gemini response:", text);
+            return res.status(502).json({ error: "استجابة غير صالحة من خدمة الذكاء الاصطناعي" });
+        }
+
+        // Validate shape
+        if (
+            (parsed.extractedPrice !== null && typeof parsed.extractedPrice !== 'number') ||
+            typeof parsed.confidenceScore !== 'number' ||
+            parsed.confidenceScore < 0 || parsed.confidenceScore > 100
+        ) {
+            return res.status(502).json({ error: "بيانات مستخرجة غير صالحة" });
+        }
+
+        res.status(200).json({ aiExtractedData: parsed });
+
+    } catch (err) {
+        console.error("AI Analysis error:", err);
+        if (err.message === 'AI_TIMEOUT') {
+            return res.status(502).json({ error: "انتهى وقت الاتصال بخدمة الذكاء الاصطناعي" });
+        }
+        res.status(502).json({ error: "تعذّر تحليل المستند تلقائياً، يمكنك إدخال السعر يدوياً", details: err.message });
+    } finally {
+        // Clean up the temp file
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+    }
+};
+
+
+/**
+ * Analyzes an uploaded National ID image to verify authenticity and extract data.
+ * Expects an image/PDF in req.file. Returns JSON with aiVerification data.
+ * Deletes the file immediately after processing. Returns 502 on AI failure.
+ */
+module.exports.analyzeIdDocument = async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'لم يتم إرفاق مستند الهوية' });
+        }
+        if (req.file.size > 5 * 1024 * 1024) {
+            safeUnlink(req.file.path);
+            return res.status(400).json({ error: 'حجم مستند الهوية يتجاوز الحد الأقصى (5 ميجابايت)' });
+        }
+        const { fileTypeFromFile } = await import('file-type');
+        const detectedType = await fileTypeFromFile(req.file.path);
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+        if (!detectedType || !allowedTypes.includes(detectedType.mime)) {
+            safeUnlink(req.file.path);
+            return res.status(400).json({ error: 'صيغة مستند الهوية غير مدعومة. ارفع PDF أو JPG أو PNG' });
+        }
+
+        const model = genAI.getGenerativeModel({ model: AI_MODEL });
+        const fileData = fs.readFileSync(req.file.path);
+
+        const prompt = `أنت نظام تدقيق هويات فلسطينية. قم بقراءة مستند الهوية المرفق واستخرج البيانات التالية بصيغة JSON فقط:
+{
+  "firstName": "الاسم الأول",
+  "lastName": "اسم العائلة",
+  "nationalId": "رقم الهوية المكون من 9 أرقام",
+  "isValid": true/false (هل تبدو الهوية حقيقية وصالحة؟),
+  "confidenceScore": 0.0 to 1.0,
+  "notes": "أي ملاحظات على جودة الصورة أو شكوك حول التزوير أو إذا كان المستند ليس هوية"
+}
+إذا لم يكن المستند هوية وطنية، أو لم يكن واضحاً، اجعل isValid = false واكتب السبب بدقة في notes (مثلاً: "الصورة غير واضحة"، "المستند ليس هوية وطنية"، "الهوية غير مكتملة").`;
+
+        const imagePart = {
+            inlineData: {
+                data: fileData.toString("base64"),
+                mimeType: req.file.mimetype
+            }
+        };
+
+        const result = await model.generateContent([prompt, imagePart]);
+        const responseText = result.response.text();
+        const extractedData = parseGeminiJson(responseText);
+
+        safeUnlink(req.file.path);
+
+        res.status(200).json({ aiVerification: extractedData });
+    } catch (err) {
+        safeUnlink(req.file?.path);
+        const code = getAiFailureCode(err);
+        res.status(502).json({ error: 'تعذّر تحليل الهوية تلقائياً', reasonCode: code });
+    }
 };
 
 /**
- * POST /api/proposals/:id/analyze — FR-10.1, FR-10.2
- *
- * The submitting organization only. 200 { aiExtractedData } on success,
- * 502 on any AI failure (SRS §4.2).
+ * Analyzes an uploaded official tender book to generate a draft tender form.
+ * Expects a file in req.file. Returns JSON with aiDraft, missing fields, and document URL.
+ * Returns 502 on AI failure, preserving the file so the user can continue manually.
  */
-const analyzeProposal = async (req, res, next) => {
-  try {
-    const proposal = await BidProposal.findById(req.params.id);
+module.exports.analyzeTenderBook = async (req, res, next) => {
+    try {
+        if (!req.file) return res.status(400).json({ errors: { officialBook: 'الكتاب الرسمي للعطاء مطلوب' } });
 
-    if (!proposal) {
-      const err = new Error("العرض المطلوب غير موجود.");
-      err.status = 404;
-      err.expose = true;
-      return next(err);
+        const { fileTypeFromFile } = await import('file-type');
+        const detectedType = await fileTypeFromFile(req.file.path);
+        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
+            safeUnlink(req.file.path);
+            return res.status(400).json({ errors: { officialBook: 'الملف غير مدعوم، يرجى رفع PDF أو JPG أو PNG' } });
+        }
+
+        const documentUrl = `/uploads/${req.file.filename}`;
+        const filePart = { inlineData: { data: Buffer.from(fs.readFileSync(req.file.path)).toString('base64'), mimeType: detectedType.mime } };
+        const prompt = `
+أنت مساعد متخصص في تنظيم العطاءات لمنصة اعتماد الفلسطينية. اقرأ الكتاب الرسمي المرفق واستخرج المعلومات بدقة. لا تخترع أي معلومة غير موجودة. أعد JSON صالحاً فقط دون Markdown.
+
+أولاً، حدد ما إذا كان المستند مرتبطاً بالمشتريات، العطاءات، طلبات عروض الأسعار، أو العقود التجارية. إذا كان المستند غير ذي صلة (مثل قائمة أسماء حيوانات، ألعاب، أو نصوص عشوائية)، اجعل isRelevant: false ولا تستخرج باقي الحقول.
+
+أعد الشكل التالي:
+{
+  "isRelevant": true,
+  "title": "عنوان العطاء أو فارغ إذا لم يوجد",
+  "description": "وصف مهني موجز مستند إلى الكتاب",
+  "category": "واحدة من: توريدات، خدمات، أشغال عامة، استشارات",
+  "budgetEstimate": null,
+  "deadline": null,
+  "customFields": [{"key":"سلسلة_إنجليزية_قصيرة","label":"اسم الحقل بالعربية","value":"القيمة","type":"text|number|date","required":false,"source":"document"}],
+  "missingRequiredFields": ["deadline"],
+  "confidenceScore": 0
+}
+
+إذا كان isRelevant: true، فالحقول الأساسية المطلوبة للنشر هي: title, description, category, deadline. إذا لم تجد الموعد النهائي، أعد deadline بقيمة null وأضف deadline إلى missingRequiredFields. استخرج الشروط والمتطلبات ومكان التسليم ومدة التنفيذ وطريقة التقديم الموجودة في الكتاب إلى customFields، بحد أقصى 20 حقلاً وبصياغة موجزة. اجعل الوصف مهنياً ومختصراً، وحافظ على الأرقام والتواريخ كما وردت دون تخمين.`;
+        const model = genAI.getGenerativeModel({
+            model: AI_MODEL,
+            generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.1,
+                maxOutputTokens: 8000
+            }
+        });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 90000));
+        const aiPromise = model.generateContent([prompt, filePart]);
+        const result = await Promise.race([aiPromise, timeoutPromise]);
+        const text = (await result.response).text();
+        const parsed = parseGeminiJson(text);
+
+        if (typeof parsed?.isRelevant !== 'boolean') {
+            throw new Error('AI_INVALID_RESPONSE');
+        }
+
+        if (parsed.isRelevant === false) {
+            safeUnlink(req.file.path);
+            return res.status(400).json({
+                error: 'المستند المرفوع لا يبدو ككتاب عطاء أو طلب عروض أسعار. يرجى رفع وثيقة مشتريات صحيحة.',
+                isIrrelevant: true
+            });
+        }
+
+        const validCategories = ['توريدات', 'خدمات', 'أشغال عامة', 'استشارات'];
+        const normalized = {
+            title: typeof parsed.title === 'string' ? parsed.title.trim() : '',
+            description: typeof parsed.description === 'string' ? parsed.description.trim() : '',
+            category: validCategories.includes(parsed.category) ? parsed.category : 'توريدات',
+            budgetEstimate: typeof parsed.budgetEstimate === 'number' && parsed.budgetEstimate >= 0 ? parsed.budgetEstimate : null,
+            deadline: typeof parsed.deadline === 'string' && parsed.deadline ? parsed.deadline : null,
+            customFields: Array.isArray(parsed.customFields) ? parsed.customFields.slice(0, 30) : [],
+            missingRequiredFields: Array.isArray(parsed.missingRequiredFields) ? parsed.missingRequiredFields : [],
+            confidenceScore: normalizeConfidenceScore(parsed.confidenceScore)
+        };
+        const standardMissing = [];
+        if (!normalized.title) standardMissing.push('title');
+        if (!normalized.description) standardMissing.push('description');
+        if (!normalized.deadline) standardMissing.push('deadline');
+        normalized.missingRequiredFields = [...new Set([...normalized.missingRequiredFields, ...standardMissing])];
+        return res.status(200).json({ aiDraft: normalized, officialBookUrl: documentUrl, officialBookName: req.file.originalname, canContinueManually: true });
+    } catch (err) {
+        const reasonCode = getAiFailureCode(err);
+        console.error('Tender book AI analysis failed:', {
+            reasonCode,
+            model: AI_MODEL,
+            providerStatus: Number(err?.status || err?.response?.status || 0) || null,
+            hasUploadedFile: Boolean(req.file)
+        });
+        if (req.file && fs.existsSync(req.file.path) && reasonCode !== 'FILE_INVALID') {
+            const documentUrl = `/uploads/${req.file.filename}`;
+            const message = reasonCode === 'AI_TIMEOUT'
+                ? 'انتهى وقت تحليل الكتاب، يمكنك متابعة الإدخال يدوياً'
+                : 'تعذّر تحليل الكتاب تلقائياً، يمكنك متابعة الإدخال يدوياً';
+            return res.status(502).json({ error: message, reasonCode, officialBookUrl: documentUrl, officialBookName: req.file.originalname, canContinueManually: true });
+        }
+        safeUnlink(req.file?.path);
+        return res.status(502).json({ error: 'تعذّر تحليل الكتاب تلقائياً', reasonCode });
     }
-
-    if (String(proposal.submittedBy) !== String(req.user._id)) {
-      const err = new Error("forbidden");
-      err.status = 403;
-      return next(err);
-    }
-
-    const aiExtractedData = await analyzeProposalDocument(proposal.documentUrl);
-
-    proposal.aiExtractedData = aiExtractedData;
-    await proposal.save();
-
-    res.json({ aiExtractedData });
-  } catch (err) {
-    if (err.aiReason) {
-      // One line, already redacted; never the document, never the key.
-      console.warn(`[ai] analysis unavailable — ${err.aiReason}`);
-    }
-    next(err);
-  }
 };
 
 /**
- * FR-15.2 — an AI-drafted contract for an accepted proposal.
- *
- * Lives here because C-7 and NFR-M4 allow exactly one module to touch the
- * Gemini SDK. Same discipline as the extraction path: a bounded timeout, no SDK
- * error ever re-thrown, and the key redacted from anything logged.
- *
- * Returns free text rather than JSON — a contract draft is prose, and FR-15.3
- * requires it to be presented as editable and non-binding.
+ * Analyzes an uploaded product document to generate dynamic auction properties.
+ * Expects a file in req.file. Returns JSON with aiDraft (title, description, itemFields).
+ * Returns 502 on AI failure, preserving the file so the user can continue manually.
  */
-const generateContractDraft = async ({ tender, proposal, ownerName, bidderName }) => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw aiUnavailable("GEMINI_API_KEY is not configured", CONTRACT_UNAVAILABLE);
-  }
+module.exports.analyzeAuctionItem = async (req, res, next) => {
+    try {
+        if (!req.file) return res.status(400).json({ errors: { officialDocument: 'وثيقة معلومات المنتج مطلوبة' } });
 
-  const facts = [
-    `الجهة صاحبة العطاء: ${ownerName ?? "غير محدد"}`,
-    `الجهة المنفّذة: ${bidderName ?? "غير محدد"}`,
-    `عنوان العطاء: ${tender?.title ?? ""}`,
-    `وصف العطاء: ${tender?.description ?? ""}`,
-    `فئة العطاء: ${tender?.category ?? ""}`,
-    `الموعد النهائي للعطاء: ${tender?.deadline ? new Date(tender.deadline).toISOString().slice(0, 10) : ""}`,
-    `القيمة المعتمدة للعرض: ${proposal?.finalPrice ?? ""}`,
-    proposal?.aiExtractedData?.summary ? `ملخص العرض: ${proposal.aiExtractedData.summary}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+        const { fileTypeFromFile } = await import('file-type');
+        const detectedType = await fileTypeFromFile(req.file.path);
+        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
+            safeUnlink(req.file.path);
+            return res.status(400).json({ errors: { officialDocument: 'الملف غير مدعوم، يرجى رفع PDF أو JPG أو PNG' } });
+        }
 
-  let text;
-  try {
-    const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({
-      model: MODEL_NAME,
-    });
-    const result = await withTimeout(
-      model.generateContent([CONTRACT_PROMPT, facts]),
-      ANALYSIS_TIMEOUT_MS
-    );
-    text = result.response.text();
-  } catch (err) {
-    throw aiUnavailable(redact(err.message).slice(0, 200), CONTRACT_UNAVAILABLE);
-  }
+        const documentUrl = `/uploads/${req.file.filename}`;
+        const filePart = {
+            inlineData: {
+                data: Buffer.from(fs.readFileSync(req.file.path)).toString('base64'),
+                mimeType: detectedType.mime
+            }
+        };
+        const prompt = `
+أنت مساعد متخصص في تنظيم بيانات المنتجات المعروضة في مزاد على منصة اعتماد الفلسطينية. اقرأ وثيقة معلومات المنتج المرفقة، وحدد إن كانت تحتوي على معلومات حقيقية عن منتج أو أصل قابل للبيع بالمزاد.
 
-  const draft = String(text ?? "").replace(/```/g, "").trim();
-  if (!draft) throw aiUnavailable("model returned an empty draft", CONTRACT_UNAVAILABLE);
+إذا كانت الوثيقة غير مرتبطة بمنتج قابل للمزاد أو تحتوي على نص عشوائي، أعد isRelevant: false. لا تخترع أي معلومات.
+إذا كانت مرتبطة، أعد نموذجاً ديناميكياً قابلاً للتعديل باللغة العربية، مع الحقول العامة وخصائص المنتج المهمة فقط. أمثلة: السيارة قد تحتاج الماركة والموديل واللون وسنة الصنع ورقم الهيكل، والكمبيوتر قد يحتاج المعالج وبطاقة الرسوميات والذاكرة والتخزين.
 
-  return draft;
+أعد JSON صالحاً فقط بالشكل التالي:
+{
+  "isRelevant": true,
+  "title": "اسم المنتج أو الأصل",
+  "description": "وصف مهني موجز مستند إلى الوثيقة",
+  "itemFields": [
+    {"key":"سلسلة_إنجليزية_قصيرة","label":"اسم الخاصية بالعربية","value":"القيمة كما وردت","type":"text|number|date","required":false,"source":"document"}
+  ],
+  "confidenceScore": 0
+}
+
+أعد من 1 إلى 30 حقلاً فقط. يجب أن تكون confidenceScore بين 0 و100. لا تضف حقولاً بقيم مخمّنة، ويمكنك إضافة حقل مهم بقيمة فارغة فقط إذا كان وجوده ضرورياً لنوع المنتج، وضع required=true عند الحاجة. لا تضع السعر أو موعد انتهاء المزاد ضمن itemFields لأنهما يملآن في نموذج المزاد نفسه.`;
+
+        const model = genAI.getGenerativeModel({
+            model: AI_MODEL,
+            generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.1,
+                maxOutputTokens: 6000
+            }
+        });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 90000));
+        const result = await Promise.race([
+            model.generateContent([prompt, filePart]),
+            timeoutPromise
+        ]);
+        const parsed = parseGeminiJson((await result.response).text());
+        if (typeof parsed?.isRelevant !== 'boolean') throw new Error('AI_INVALID_RESPONSE');
+        if (parsed.isRelevant === false) {
+            safeUnlink(req.file.path);
+            return res.status(400).json({
+                error: 'المستند المرفوع لا يحتوي على معلومات منتج مناسبة للمزاد. يرجى رفع وثيقة صحيحة.',
+                isIrrelevant: true
+            });
+        }
+
+        const itemFields = Array.isArray(parsed.itemFields) ? parsed.itemFields.slice(0, 30).map((field, index) => ({
+            key: String(field?.key || `field_${index + 1}`).trim().slice(0, 80),
+            label: String(field?.label || '').trim().slice(0, 120),
+            value: String(field?.value || '').trim().slice(0, 1000),
+            type: ['text', 'number', 'date'].includes(field?.type) ? field.type : 'text',
+            required: Boolean(field?.required),
+            source: 'document'
+        })).filter((field) => field.label) : [];
+
+        if (!String(parsed.title || '').trim() || !String(parsed.description || '').trim()) {
+            throw new Error('AI_INVALID_RESPONSE');
+        }
+
+        return res.status(200).json({
+            aiDraft: {
+                title: String(parsed.title).trim().slice(0, 200),
+                description: String(parsed.description).trim().slice(0, 3000),
+                itemFields,
+                confidenceScore: normalizeConfidenceScore(parsed.confidenceScore)
+            },
+            officialDocumentUrl: documentUrl,
+            officialDocumentName: req.file.originalname,
+            canContinueManually: true
+        });
+    } catch (err) {
+        const reasonCode = getAiFailureCode(err);
+        console.error('Auction item AI analysis failed:', {
+            reasonCode,
+            model: AI_MODEL,
+            providerStatus: Number(err?.status || err?.response?.status || 0) || null,
+            hasUploadedFile: Boolean(req.file)
+        });
+        if (req.file && fs.existsSync(req.file.path) && reasonCode !== 'FILE_INVALID') {
+            return res.status(502).json({
+                error: reasonCode === 'AI_TIMEOUT' ? 'انتهى وقت تحليل وثيقة المنتج، يمكنك متابعة الإدخال يدوياً' : 'تعذّر تحليل وثيقة المنتج تلقائياً، يمكنك متابعة الإدخال يدوياً',
+                reasonCode,
+                officialDocumentUrl: `/uploads/${req.file.filename}`,
+                officialDocumentName: req.file.originalname,
+                canContinueManually: true
+            });
+        }
+        safeUnlink(req.file?.path);
+        return res.status(502).json({ error: 'تعذّر تحليل وثيقة المنتج تلقائياً', reasonCode });
+    }
 };
+
 
 /**
- * POST /api/proposals/:id/contract-draft — FR-15.2, tender owner only.
- *
- * 502 on any AI failure, so the client shows an Arabic notice and the thread
- * stays usable (the NFR-R1 discipline from Sprint 05).
+ * Analyzes an already-submitted proposal document against its parent tender's requirements.
+ * Expects proposalId in req.params. Saves and returns the resulting aiExtractedData.
+ * Restricted to the tender owner or an admin. Returns 502 on AI failure.
  */
-const requestContractDraft = async (req, res, next) => {
-  try {
-    const proposal = await BidProposal.findById(req.params.id)
-      .populate("submittedBy", "companyName")
-      .populate("tender", "title description category deadline createdBy");
+module.exports.analyzeExistingProposal = async (req, res, next) => {
+    try {
+        const BidProposal = require('../models/bidProposal.model');
+        const proposal = await BidProposal.findById(req.params.proposalId).populate('tender');
+        if (!proposal) return res.status(404).json({ error: 'العرض غير موجود' });
+        if (!proposal.tender) return res.status(404).json({ error: 'العطاء المرتبط بالعرض غير موجود' });
+        if (proposal.tender.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'تحليل العرض متاح لمالك العطاء فقط' });
+        }
 
-    if (!proposal) {
-      const err = new Error("العرض المطلوب غير موجود.");
-      err.status = 404;
-      err.expose = true;
-      return next(err);
+        const uploadRoot = path.resolve(__dirname, '..');
+        const relativeDocumentPath = String(proposal.documentUrl || '').replace(/^\/+/, '');
+        const documentPath = path.resolve(uploadRoot, relativeDocumentPath);
+        const relativeToUploadRoot = path.relative(uploadRoot, documentPath);
+        if (relativeToUploadRoot.startsWith('..') || path.isAbsolute(relativeToUploadRoot) || !fs.existsSync(documentPath)) {
+            return res.status(404).json({ error: 'مستند العرض غير موجود' });
+        }
+
+        const aiExtractedData = await analyzeProposalFile(documentPath, null, proposal.tender);
+        proposal.aiExtractedData = aiExtractedData;
+        await proposal.save();
+        return res.status(200).json({ aiExtractedData, proposal });
+    } catch (err) {
+        const reasonCode = getAiFailureCode(err);
+        console.error('Existing proposal AI analysis failed:', {
+            reasonCode,
+            model: AI_MODEL,
+            providerStatus: Number(err?.status || err?.response?.status || 0) || null,
+            proposalId: req.params.proposalId
+        });
+        return res.status(reasonCode === 'FILE_INVALID' ? 400 : 502).json({
+            error: reasonCode === 'FILE_INVALID' ? 'مستند العرض غير مدعوم' : 'تعذّر تحليل العرض تلقائياً حالياً',
+            reasonCode
+        });
     }
-
-    // FR-15.2 — the tender owner alone may ask for a draft.
-    if (String(proposal.tender?.createdBy) !== String(req.user._id)) {
-      const err = new Error("forbidden");
-      err.status = 403;
-      return next(err);
-    }
-
-    // A draft only makes sense once a proposal has been accepted (FR-15.1).
-    if (proposal.status !== "accepted") {
-      const err = new Error("لا يمكن إنشاء مسودة عقد إلا بعد قبول العرض.");
-      err.status = 400;
-      err.expose = true;
-      return next(err);
-    }
-
-    const tenderOwner = await Tender.findById(proposal.tender._id).populate(
-      "createdBy",
-      "companyName"
-    );
-
-    const contractDraft = await generateContractDraft({
-      tender: proposal.tender,
-      proposal,
-      ownerName: tenderOwner?.createdBy?.companyName,
-      bidderName: proposal.submittedBy?.companyName,
-    });
-
-    proposal.contractDraft = contractDraft;
-    await proposal.save();
-
-    res.json({ contractDraft });
-  } catch (err) {
-    if (err.aiReason) {
-      console.warn(`[ai] contract draft unavailable — ${err.aiReason}`);
-    }
-    next(err);
-  }
-};
-
-module.exports = {
-  analyzeProposal,
-  analyzeProposalDocument,
-  requestContractDraft,
-  generateContractDraft,
 };

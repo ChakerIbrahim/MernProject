@@ -1,23 +1,16 @@
-import { Navigate } from "react-router-dom";
-import Spinner from "./Spinner";
-import { useAuth } from "../functions/authContext";
-import { dashboardPathFor } from "../functions/roles";
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
-/**
- * FR-5.3 client mirror. Sends a user with the wrong role to their own
- * dashboard rather than rendering the screen even briefly. The server returns
- * 403 independently of anything this component does (FR-5.5).
- *
- * @param {string[]} roles
- */
-const RequireRole = ({ roles, children }) => {
-  const { user, isLoading } = useAuth();
+export default function RequireRole({ roles, children }) {
+    const { user } = useAuth();
 
-  if (isLoading) return <Spinner label="جاري التحقق من الصلاحيات…" />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to={dashboardPathFor(user.role)} replace />;
+    if (!user || !roles.includes(user.role)) {
+        if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+        if (user?.role === 'organization') return <Navigate to="/org/dashboard" replace />;
+        if (user?.role === 'individual') return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/" replace />;
+    }
 
-  return children;
-};
-
-export default RequireRole;
+    return children;
+}

@@ -1,111 +1,287 @@
-const User = require("../models/user.model");
-
-const ALREADY_DECIDED = "تمت معالجة هذا الطلب مسبقاً.";
-const NOT_FOUND = "لا توجد مؤسسة بهذا المعرّف.";
-
-const httpError = (status, message) => {
-  const err = new Error(message);
-  err.status = status;
-  err.expose = true;
-  return err;
-};
+const User = require('../models/user.model');
+const { sendEmail } = require('../services/email.service');
 
 /**
- * Loads a pending organization or throws the right status.
- * 404 for "no such organization", 400 for "already approved or rejected" —
- * a second decision must not look like a silent success.
+ * Retrieves all organization accounts currently awaiting approval.
+ * Returns a JSON object containing the organizations array.
  */
-const loadPendingOrganization = async (id) => {
-  const organization = await User.findOne({ _id: id, role: "organization" });
-  if (!organization) throw httpError(404, NOT_FOUND);
-  if (organization.status !== "pending") throw httpError(400, ALREADY_DECIDED);
-  return organization;
-};
-
-/** GET /api/admin/organizations/pending — FR-4.1 */
-const listPendingOrganizations = async (req, res, next) => {
-  try {
-    const organizations = await User.find({
-      role: "organization",
-      status: "pending",
-    }).sort({ createdAt: 1 });
-
-    res.json({ organizations });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * GET /api/admin/users — full user directory for account management, since
- * listPendingOrganizations only surfaces organizations awaiting review.
- * Password hashes are never returned — the schema's toJSON transform strips
- * them regardless of how the document was fetched.
- */
-const listAllUsers = async (req, res, next) => {
-  try {
-    const { role } = req.query;
-    const filter = {};
-
-    if (role && ["admin", "organization", "individual"].includes(role)) {
-      filter.role = role;
+module.exports.listPendingOrganizations = async (req, res, next) => {
+    try {
+        const organizations = await User.find({ role: 'organization', status: 'pending' }).select('-password');
+        res.status(200).json({ organizations });
+    } catch (err) {
+        next(err);
     }
-
-    const users = await User.find(filter).sort({ createdAt: -1 });
-
-    res.json({ users });
-  } catch (err) {
-    next(err);
-  }
 };
 
-/** PATCH /api/admin/organizations/:id/approve — FR-4.2 */
-const approveOrganization = async (req, res, next) => {
-  try {
-    const organization = await loadPendingOrganization(req.params.id);
+/**
+ * Approves a pending organization and sends an email notification.
+ * Expects the organization ID in req.params.id.
+ * Returns the updated organization and email status.
+ */
+module.exports.approveOrganization = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const org = await User.findById(id);
 
-    organization.status = "approved";
-    organization.rejectionReason = undefined;
-    await organization.save();
+        if (!org || org.role !== 'organization') {
+            return res.status(404).json({ error: "المؤسسة غير موجودة" });
+        }
+        if (org.status !== 'pending') {
+            return res.status(400).json({ error: "تم اتخاذ قرار مسبقاً بشأن هذه المؤسسة" });
+        }
 
-    // FR-4.4 / FR-16.1 — the approval notice is sent from the browser, after
-    // this response lands, by notifyOrganizationApproved in
-    // client/src/functions/sendEmail.js. EmailJS is client-side by design
-    // (C-8), so there is nothing to send from here. A failed send never rolls
-    // back or retries this approval (FR-4.5, NFR-R2): the record above is
-    // already the source of truth.
+        org.status = 'approved';
+        await org.save();
 
-    res.json({ organization });
-  } catch (err) {
-    next(err);
-  }
+        const emailSent = await sendEmail({
+            templateType: 'GENERAL',
+            to_email: org.email,
+            to_name: org.companyName || org.name,
+            subject: 'تم اعتماد حساب المؤسسة - اعتماد',
+            details: 'تم اعتماد حساب مؤسستكم ويمكنكم الآن تسجيل الدخول واستخدام خدمات منصة اعتماد.'
+        });
+
+        res.status(200).json({ organization: org, emailSent });
+    } catch (err) {
+        next(err);
+    }
 };
 
-/** PATCH /api/admin/organizations/:id/reject — FR-4.3 */
-const rejectOrganization = async (req, res, next) => {
-  try {
-    const organization = await loadPendingOrganization(req.params.id);
+/**
+ * Rejects a pending organization, saves an optional reason, and sends an email.
+ * Expects the organization ID in req.params.id and reason in req.body.
+ * Returns the updated organization and email status.
+ */
+module.exports.rejectOrganization = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { rejectionReason } = req.body;
 
-    const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+        const org = await User.findById(id);
 
-    organization.status = "rejected";
-    organization.rejectionReason = reason || undefined;
-    await organization.save();
+        if (!org || org.role !== 'organization') {
+            return res.status(404).json({ error: "المؤسسة غير موجودة" });
+        }
+        if (org.status !== 'pending') {
+            return res.status(400).json({ error: "تم اتخاذ قرار مسبقاً بشأن هذه المؤسسة" });
+        }
 
-    // FR-4.4 / FR-16.1 — the rejection notice, with rejectionReason when
-    // present, is sent from the browser by notifyOrganizationRejected in
-    // client/src/functions/sendEmail.js. A failed send never rolls back this
-    // rejection (FR-4.5, NFR-R2).
+        org.status = 'rejected';
+        org.rejectionReason = rejectionReason || '';
+        await org.save();
 
-    res.json({ organization });
-  } catch (err) {
-    next(err);
-  }
+        const emailSent = await sendEmail({
+            templateType: 'GENERAL',
+            to_email: org.email,
+            to_name: org.companyName || org.name,
+            subject: 'تحديث حالة طلب المؤسسة - اعتماد',
+            details: rejectionReason ? `تم رفض طلب التسجيل. السبب: ${rejectionReason}` : 'تم رفض طلب تسجيل المؤسسة.'
+        });
+
+        res.status(200).json({ organization: org, emailSent });
+    } catch (err) {
+        next(err);
+    }
 };
 
-module.exports = {
-  listPendingOrganizations,
-  approveOrganization,
-  rejectOrganization,
-  listAllUsers,
+// --- Account Management ---
+/**
+ * Retrieves all non-admin users in the system.
+ * Returns a JSON object containing the users array.
+ */
+module.exports.listUsers = async (req, res, next) => {
+    try {
+        const users = await User.find({ role: { $ne: 'admin' } }).select('-password').sort({ createdAt: -1 });
+        res.status(200).json({ users });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Retrieves a single user by their ID, excluding the password field.
+ * Returns the user object or 404 if not found.
+ */
+module.exports.getUserById = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id).select('-password');
+        if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
+        res.status(200).json({ user });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Changes a user's status to 'deactivated'. Admins cannot be deactivated.
+ * Returns a success message and the updated user object.
+ */
+module.exports.deactivateUser = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user || user.role === 'admin') return res.status(404).json({ error: 'لا يمكن تعطيل هذا الحساب' });
+        user.status = 'deactivated';
+        await user.save();
+        res.status(200).json({ message: 'تم تعطيل الحساب بنجاح', user });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Changes a user's status to 'approved', re-enabling their account.
+ * Returns a success message and the updated user object.
+ */
+module.exports.activateUser = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ error: 'الحساب غير موجود' });
+        user.status = 'approved';
+        await user.save();
+        res.status(200).json({ message: 'تم تفعيل الحساب بنجاح', user });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Permanently deletes a user from the database. Admins cannot be deleted.
+ * Returns a success message.
+ */
+module.exports.deleteUser = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user || user.role === 'admin') return res.status(404).json({ error: 'لا يمكن حذف هذا الحساب' });
+        await User.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: 'تم حذف الحساب نهائياً' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// --- Tender Management ---
+const Tender = require('../models/tender.model');
+
+/**
+ * Retrieves all tenders, populating the creator's basic details.
+ * Returns a JSON object containing the tenders array.
+ */
+module.exports.listTenders = async (req, res, next) => {
+    try {
+        const tenders = await Tender.find().populate('createdBy', 'name companyName email').sort({ createdAt: -1 });
+        res.status(200).json({ tenders });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Changes a tender's status to 'closed'.
+ * Returns a success message and the updated tender object.
+ */
+module.exports.closeTender = async (req, res, next) => {
+    try {
+        const tender = await Tender.findById(req.params.id);
+        if (!tender) return res.status(404).json({ error: 'العطاء غير موجود' });
+        tender.status = 'closed';
+        await tender.save();
+        res.status(200).json({ message: 'تم إغلاق العطاء بنجاح', tender });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Changes a tender's status to 'open'.
+ * Returns a success message and the updated tender object.
+ */
+module.exports.openTender = async (req, res, next) => {
+    try {
+        const tender = await Tender.findById(req.params.id);
+        if (!tender) return res.status(404).json({ error: 'العطاء غير موجود' });
+        tender.status = 'open';
+        await tender.save();
+        res.status(200).json({ message: 'تم فتح العطاء بنجاح', tender });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Permanently deletes a tender from the database.
+ * Returns a success message.
+ */
+module.exports.deleteTender = async (req, res, next) => {
+    try {
+        const tender = await Tender.findById(req.params.id);
+        if (!tender) return res.status(404).json({ error: 'العطاء غير موجود' });
+        await Tender.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: 'تم حذف العطاء نهائياً' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// --- Auction Management ---
+const Auction = require('../models/auction.model');
+
+/**
+ * Retrieves all auctions, populating the creator's basic details.
+ * Returns a JSON object containing the auctions array.
+ */
+module.exports.listAuctions = async (req, res, next) => {
+    try {
+        const auctions = await Auction.find().populate('createdBy', 'name companyName email').sort({ createdAt: -1 });
+        res.status(200).json({ auctions });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Changes an auction's status to 'ended'.
+ * Returns a success message and the updated auction object.
+ */
+module.exports.closeAuction = async (req, res, next) => {
+    try {
+        const auction = await Auction.findById(req.params.id);
+        if (!auction) return res.status(404).json({ error: 'المزاد غير موجود' });
+        auction.status = 'ended';
+        await auction.save();
+        res.status(200).json({ message: 'تم إغلاق المزاد بنجاح', auction });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Changes an auction's status to 'active'.
+ * Returns a success message and the updated auction object.
+ */
+module.exports.openAuction = async (req, res, next) => {
+    try {
+        const auction = await Auction.findById(req.params.id);
+        if (!auction) return res.status(404).json({ error: 'المزاد غير موجود' });
+        auction.status = 'active';
+        await auction.save();
+        res.status(200).json({ message: 'تم فتح المزاد بنجاح', auction });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Permanently deletes an auction from the database.
+ * Returns a success message.
+ */
+module.exports.deleteAuction = async (req, res, next) => {
+    try {
+        const auction = await Auction.findById(req.params.id);
+        if (!auction) return res.status(404).json({ error: 'المزاد غير موجود' });
+        await Auction.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: 'تم حذف المزاد نهائياً' });
+    } catch (err) {
+        next(err);
+    }
 };

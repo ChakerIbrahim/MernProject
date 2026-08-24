@@ -1,145 +1,125 @@
-const jwt = require("jsonwebtoken");
-const User = require("../models/user.model");
+const jwt = require('jsonwebtoken');
 
 /**
- * Signs the token returned by login. The payload carries only the identifier
- * and the role — never the password hash or anything else sensitive.
- *
- * No expiry is set: that is accepted limitation L-1 for the MVP, not an
- * oversight. See SRS §7.1.
+ * Verifies the JWT Bearer token from the Authorization header.
+ * Attaches the decoded payload to req.user if valid.
+ * Returns 401 if missing or invalid.
  */
-const signToken = (user) =>
-  jwt.sign({ id: user._id.toString(), role: user.role }, process.env.SECRET);
-
-const unauthenticated = () => {
-  const err = new Error("unauthenticated");
-  err.status = 401;
-  return err;
-};
-
-/**
- * FR-5.1, FR-5.2, NFR-S3. Verifies the Bearer token before any controller
- * logic runs and attaches the *database record* to req.user, so role and
- * status are re-derived server-side on every request (FR-5.4, NFR-S6) rather
- * than trusted from the token's claims or — never — the request body.
- */
-const isAuth = async (req, res, next) => {
-  try {
-    const header = req.headers.authorization || "";
-    const [scheme, token] = header.split(" ");
-
-    if (scheme !== "Bearer" || !token) return next(unauthenticated());
-
-    let payload;
-    try {
-      payload = jwt.verify(token, process.env.SECRET);
-    } catch {
-      // Expired, malformed, or tampered signature — all 401, never 403.
-      return next(unauthenticated());
+module.exports.isAuth = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "غير مصرح لك بالوصول" });
     }
 
-    const user = await User.findById(payload.id);
-    if (!user) return next(unauthenticated());
-
-    req.user = user;
-    next();
-  } catch (err) {
-    next(err);
-  }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.SECRET, (err, payload) => {
+        if (err) {
+            return res.status(401).json({ error: "الجلسة منتهية أو غير صالحة" });
+        }
+        req.user = payload;
+        next();
+    });
 };
 
 /**
- * FR-5.3. A factory, so routes read: isAuth, isRole(["admin"]).
- * Runs only after isAuth; 403 means authenticated but wrong role, which is a
- * different outcome from 401 and later sprints depend on the distinction.
- *
- * @param {string[]} allowed
+ * Restricts access to specific roles.
+ * Must be used after isAuth.
+ * Returns 403 if req.user.role is not in allowedRoles.
  */
-const isRole = (allowed) => (req, res, next) => {
-  if (!req.user) return next(unauthenticated());
-
-  if (!allowed.includes(req.user.role)) {
-    const err = new Error("forbidden");
-    err.status = 403;
-    return next(err);
-  }
-
-  next();
+module.exports.isRole = (allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ error: "لا تملك الصلاحية الكافية" });
+        }
+        next();
+    };
 };
 
 /**
- * FR-6.3 / FR-1.5 — the status gate. An organization whose account is still
- * pending, or was rejected, may authenticate but may not act.
- *
- * Built here in Sprint 02 so that Sprint 03 puts it in front of tender
- * creation rather than improvising the check inside a controller. Without it a
- * pending organization can create tenders by calling the API directly, since
- * hiding the button on the client is only a usability measure (FR-5.5).
+ * Checks for a JWT but does not reject the request if missing.
+ * Attaches req.user if a valid token exists, otherwise proceeds anonymously.
  */
-const isApprovedOrganization = (req, res, next) => {
-  if (!req.user) return next(unauthenticated());
-
-  if (req.user.role !== "organization") {
-    const err = new Error("forbidden");
-    err.status = 403;
-    return next(err);
-  }
-
-  if (req.user.status !== "approved") {
-    const err = new Error(
-      "لا يمكن تنفيذ هذا الإجراء قبل موافقة الإدارة على حساب المؤسسة."
-    );
-    err.status = 403;
-    err.expose = true;
-    return next(err);
-  }
-
-  next();
-};
-
-/**
- * FR-12.1 — auctions may be listed by an approved organization OR an admin.
- * isApprovedOrganization alone refuses admins, so this composes the two.
- */
-const isApprovedOrganizationOrAdmin = (req, res, next) => {
-  if (!req.user) return next(unauthenticated());
-  if (req.user.role === "admin") return next();
-  return isApprovedOrganization(req, res, next);
-};
-
-/**
- * For genuinely public endpoints that still behave differently for a signed-in
- * caller — the public auction detail hides a pending listing from strangers but
- * shows it to its creator and to admins (FR-12.2, FR-12.4).
- *
- * Never rejects: a missing or invalid token simply leaves req.user undefined.
- */
-const attachUserIfPresent = async (req, res, next) => {
-  try {
-    const header = req.headers.authorization || "";
-    const [scheme, token] = header.split(" ");
-    if (scheme !== "Bearer" || !token) return next();
-
-    let payload;
-    try {
-      payload = jwt.verify(token, process.env.SECRET);
-    } catch {
-      return next();
+module.exports.optionalAuth = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return next();
     }
 
-    req.user = (await User.findById(payload.id)) || undefined;
-    next();
-  } catch {
-    // A lookup failure must not break a public route.
-    next();
-  }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.SECRET, (err, payload) => {
+        if (!err) req.user = payload;
+        next();
+    });
 };
 
-module.exports = {
-  signToken,
-  isAuth,
-  isRole,
-  isApprovedOrganization,
-  isApprovedOrganizationOrAdmin,
-  attachUserIfPresent,
+/**
+ * Allows admins, or organizations with 'approved' status in the database.
+ * Requires a database lookup for organizations to verify current status.
+ * Returns 403 if not approved or wrong role.
+ */
+module.exports.isApprovedOrganizationOrAdmin = async (req, res, next) => {
+    try {
+        if (req.user?.role === 'admin') return next();
+        if (req.user?.role !== 'organization') {
+            return res.status(403).json({ error: "هذا الإجراء مخصص للمؤسسات المعتمدة أو المشرف" });
+        }
+
+        const User = require('../models/user.model');
+        const organization = await User.findById(req.user.id).select('status role');
+        if (!organization || organization.role !== 'organization' || organization.status !== 'approved') {
+            return res.status(403).json({ error: "حساب المؤسسة غير معتمد حتى الآن" });
+        }
+        next();
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Strictly requires the user to be an 'approved' organization.
+ * Performs a database lookup to confirm status.
+ * Returns 403 if unapproved or not an organization.
+ */
+module.exports.isApprovedOrganization = async (req, res, next) => {
+    try {
+        if (!req.user || req.user.role !== 'organization') {
+            return res.status(403).json({ error: "هذا الإجراء مخصص للمؤسسات فقط" });
+        }
+        const User = require('../models/user.model');
+        const org = await User.findById(req.user.id);
+        if (!org || org.status !== 'approved') {
+            return res.status(403).json({ error: "حساب المؤسسة غير معتمد حتى الآن" });
+        }
+        next();
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Verifies the user is either an admin or the owner of the specific resource.
+ * Looks up the document by ID and compares its ownerField to req.user.id.
+ * Returns 404 if not found, 403 if not owned/admin.
+ */
+module.exports.isOwnerOrAdmin = (model, idParam = 'id', ownerField = 'createdBy') => {
+    return async (req, res, next) => {
+        try {
+            if (req.user.role === 'admin') {
+                return next();
+            }
+
+            const doc = await model.findById(req.params[idParam]);
+            if (!doc) {
+                return res.status(404).json({ error: "العنصر غير موجود" });
+            }
+
+            if (doc[ownerField].toString() !== req.user.id) {
+                return res.status(403).json({ error: "لا تملك الصلاحية لتعديل هذا العنصر" });
+            }
+
+            next();
+        } catch (err) {
+            next(err);
+        }
+    };
 };

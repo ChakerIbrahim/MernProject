@@ -1,58 +1,53 @@
-const express = require("express");
-const {
-  submitProposal,
-  listMyProposals,
-  listProposalsForTender,
-  getProposalById,
-  updateProposalPrice,
-  updateProposalStatus,
-} = require("../controllers/proposal.controller");
-const { analyzeProposal } = require("../controllers/ai.controller");
-const { isAuth,  isApprovedOrganization } = require("../config/jwt.config");
-const { isOwnerOrAdmin } = require("../config/ownership.config");
-const { upload, verifyUploadedFile } = require("../config/multer.config");
-const Tender = require("../models/tender.model");
+const ProposalController = require('../controllers/proposal.controller');
+const NegotiationController = require('../controllers/negotiation.controller');
+const AiController = require('../controllers/ai.controller');
+const { isAuth, isRole, isApprovedOrganization } = require('../config/jwt.config');
+const upload = require('../config/multer.config');
 
-const router = express.Router();
+/**
+ * Registers all API routes related to proposals and their associated negotiation messages.
+ * Uses multer middleware for proposal document uploads.
+ */
+module.exports = (app) => {
+    // Submit proposal (Approved Org only)
+    app.post(
+        '/api/tenders/:id/proposals',
+        isAuth,
+        isRole(['organization']),
+        isApprovedOrganization,
+        upload.single('document'),
+        ProposalController.submitProposal
+    );
 
-// FR-9.1 — only an approved organization submits, and never on its own tender
-// (the self-bid check lives in the controller, which has the tender loaded).
-router.post(
-  "/tenders/:id/proposals",
-  isAuth,
-  isApprovedOrganization,
-  upload.single("proposalDocument"),
-  verifyUploadedFile,
-  submitProposal
-);
+    // List proposals for a tender (Owner or Admin)
+    app.get(
+        '/api/tenders/:id/proposals',
+        isAuth,
+        ProposalController.listProposalsForTender
+    );
 
-// FR-11.1 — the tender's owner or an admin. isOwnerOrAdmin loads the tender
-// from :id and refuses everyone else, which is what stops one organization
-// reading another's prices.
-router.get(
-  "/tenders/:id/proposals",
-  isAuth,
-  isOwnerOrAdmin(Tender),
-  listProposalsForTender
-);
+    // Change proposal status (Tender Owner)
+    app.patch(
+        '/api/proposals/:id/status',
+        isAuth,
+        ProposalController.updateProposalStatus
+    );
 
-// The caller's own proposals, so a submitter can find an accepted one and
-// open its negotiation thread (FR-15.1). Declared BEFORE /proposals/:id so
-// "mine" is never read as an id.
-router.get("/proposals", isAuth, isApprovedOrganization, listMyProposals);
+    // List proposals submitted by the current organization
+    app.get(
+        '/api/users/me/proposals',
+        isAuth,
+        isRole(['organization']),
+        ProposalController.listMyProposals
+    );
 
-// Tender owner, submitter, or admin — decided inside the controller, since the
-// answer depends on two different documents.
-router.get("/proposals/:id", isAuth, getProposalById);
+    // Get specific proposal (Owner, Submitter, or Admin)
+    app.get(
+        '/api/proposals/:proposalId',
+        isAuth,
+        ProposalController.getProposalById
+    );
 
-// FR-10.1 / FR-10.2 — the submitting organization analyses its own document.
-// Returns 502 on any AI failure so the client offers the manual path (FR-10.4).
-router.post("/proposals/:id/analyze", isAuth, isApprovedOrganization, analyzeProposal);
-
-// FR-10.3 — the submitter revises its own final price after seeing the analysis.
-router.patch("/proposals/:id", isAuth, isApprovedOrganization, updateProposalPrice);
-
-// FR-11.2 — the tender owner accepts or rejects. Never touches other proposals.
-router.patch("/proposals/:id/status", isAuth, isApprovedOrganization, updateProposalStatus);
-
-module.exports = router;
+    app.get('/api/proposals/:id/messages', isAuth, NegotiationController.listMessages);
+    app.post('/api/proposals/:id/messages', isAuth, isRole(['organization']), NegotiationController.sendMessage);
+};

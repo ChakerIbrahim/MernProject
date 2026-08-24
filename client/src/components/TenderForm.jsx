@@ -1,144 +1,114 @@
-import Button from "./Button";
-import FormField from "./FormField";
-import { TENDER_CATEGORIES, todayForInput } from "../functions/tenders";
+import React, { useState, useEffect } from 'react';
+import FormField from './FormField';
+import Button from './Button';
 
-/**
- * Shared create/edit form. The page owns the values and the submit; this
- * renders fields and surfaces the server's per-field error map (AGENTS.md).
- *
- * @param {object} values      { title, description, category, budgetEstimate, deadline }
- * @param {(field: string, value: string) => void} onChange
- * @param {(event: object) => void} onSubmit
- * @param {object} [errors]    per-field Arabic messages from the API
- * @param {string} [formError] one form-level Arabic sentence
- * @param {boolean} [isSubmitting]
- * @param {string} [submitLabel]
- * @param {React.ReactNode} [secondaryAction]
- */
-const TenderForm = ({
-  values,
-  onChange,
-  onSubmit,
-  errors = {},
-  formError = "",
-  isSubmitting = false,
-  submitLabel = "حفظ",
-  secondaryAction,
-}) => {
-  const handle = (field) => (event) => onChange(field, event.target.value);
+export default function TenderForm({ initialData, onSubmit, isSubmitting, serverErrors }) {
+    const [formData, setFormData] = useState({
+        title: '',
+        description: '',
+        category: 'توريدات',
+        budgetEstimate: '',
+        deadline: ''
+    });
 
-  const controlClasses =
-    "w-full rounded-field border bg-surface px-3 py-2 text-ink text-start " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-registry-green";
+    useEffect(() => {
+        if (initialData) {
+            setFormData({
+                title: initialData.title || '',
+                description: initialData.description || '',
+                category: initialData.category || 'توريدات',
+                budgetEstimate: initialData.budgetEstimate || '',
+                deadline: initialData.deadline ? new Date(initialData.deadline).toISOString().split('T')[0] : ''
+            });
+        }
+    }, [initialData]);
 
-  return (
-    <form
-      onSubmit={onSubmit}
-      noValidate
-      className="rounded-card border border-border bg-surface p-4 sm:p-6"
-    >
-      {formError ? (
-        <p
-          role="alert"
-          className="mb-4 rounded-field border border-error bg-surface px-3 py-2 text-sm text-error"
-        >
-          {formError}
-        </p>
-      ) : null}
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.id]: e.target.value });
+    };
 
-      <FormField
-        id="tender-title"
-        label="عنوان العطاء"
-        value={values.title}
-        onChange={handle("title")}
-        error={errors.title}
-        required
-      />
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSubmit(formData);
+    };
 
-      <div className="mb-4">
-        <label htmlFor="tender-description" className="mb-1 block text-sm text-ink">
-          وصف العطاء
-          <span aria-hidden="true" className="text-error">
-            {" *"}
-          </span>
-        </label>
-        <textarea
-          id="tender-description"
-          rows={5}
-          value={values.description}
-          onChange={handle("description")}
-          aria-invalid={errors.description ? true : undefined}
-          aria-describedby={errors.description ? "tender-description-error" : undefined}
-          className={`${controlClasses} ${errors.description ? "border-error" : "border-border"}`}
-        />
-        {errors.description ? (
-          <p id="tender-description-error" role="alert" className="mt-1 text-sm text-error">
-            {errors.description}
-          </p>
-        ) : null}
-      </div>
+    const today = new Date().toISOString().split('T')[0];
 
-      <div className="mb-4">
-        <label htmlFor="tender-category" className="mb-1 block text-sm text-ink">
-          الفئة
-          <span aria-hidden="true" className="text-error">
-            {" *"}
-          </span>
-        </label>
-        <select
-          id="tender-category"
-          value={values.category}
-          onChange={handle("category")}
-          aria-invalid={errors.category ? true : undefined}
-          aria-describedby={errors.category ? "tender-category-error" : undefined}
-          className={`${controlClasses} ${errors.category ? "border-error" : "border-border"}`}
-        >
-          <option value="">اختر فئة</option>
-          {TENDER_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-        {errors.category ? (
-          <p id="tender-category-error" role="alert" className="mt-1 text-sm text-error">
-            {errors.category}
-          </p>
-        ) : null}
-      </div>
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <FormField id="title" label="عنوان العطاء" value={formData.title} onChange={handleChange} error={serverErrors?.title} />
 
-      <FormField
-        id="tender-budget"
-        label="الميزانية التقديرية"
-        type="number"
-        dir="ltr"
-        value={values.budgetEstimate}
-        onChange={handle("budgetEstimate")}
-        error={errors.budgetEstimate}
-        hint="اختياري."
-      />
+            <div className="flex flex-col gap-1 mb-4">
+                <label htmlFor="description" className="text-sm font-medium text-ink">وصف العطاء</label>
+                <textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    className={`border rounded-md p-2 bg-surface text-ink focus:outline-none focus:ring-1 ${
+                        serverErrors?.description ? 'border-error focus:ring-error' : 'border-border focus:ring-registry-green'
+                    }`}
+                    rows="4"
+                    aria-invalid={!!serverErrors?.description}
+                    aria-describedby={serverErrors?.description ? 'description-error' : undefined}
+                />
+                {serverErrors?.description && (
+                    <span id="description-error" role="alert" className="text-sm text-error mt-1">
+                        {serverErrors.description}
+                    </span>
+                )}
+            </div>
 
-      <FormField
-        id="tender-deadline"
-        label="الموعد النهائي"
-        type="date"
-        dir="ltr"
-        value={values.deadline}
-        onChange={handle("deadline")}
-        error={errors.deadline}
-        hint="يجب أن يكون تاريخاً في المستقبل."
-        min={todayForInput()}
-        required
-      />
+            <div className="flex flex-col gap-1 mb-4">
+                <label htmlFor="category" className="text-sm font-medium text-ink">الفئة</label>
+                <select
+                    id="category"
+                    value={formData.category}
+                    onChange={handleChange}
+                    className={`border rounded-md p-2 bg-surface text-ink focus:outline-none focus:ring-1 ${
+                        serverErrors?.category ? 'border-error focus:ring-error' : 'border-border focus:ring-registry-green'
+                    }`}
+                    aria-invalid={!!serverErrors?.category}
+                    aria-describedby={serverErrors?.category ? 'category-error' : undefined}
+                >
+                    <option value="توريدات">توريدات</option>
+                    <option value="خدمات">خدمات</option>
+                    <option value="أشغال عامة">أشغال عامة</option>
+                    <option value="استشارات">استشارات</option>
+                </select>
+                {serverErrors?.category && (
+                    <span id="category-error" role="alert" className="text-sm text-error mt-1">
+                        {serverErrors.category}
+                    </span>
+                )}
+            </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" isLoading={isSubmitting}>
-          {submitLabel}
-        </Button>
-        {secondaryAction}
-      </div>
-    </form>
-  );
-};
+            <FormField
+                id="budgetEstimate"
+                label="الميزانية التقديرية (اختياري)"
+                type="number"
+                min="0"
+                value={formData.budgetEstimate}
+                onChange={handleChange}
+                error={serverErrors?.budgetEstimate}
+                dir="ltr"
+                className="text-start tabular-nums"
+            />
 
-export default TenderForm;
+            <FormField
+                id="deadline"
+                label="الموعد النهائي"
+                type="date"
+                min={today}
+                value={formData.deadline}
+                onChange={handleChange}
+                error={serverErrors?.deadline}
+                dir="ltr"
+                className="text-start tabular-nums"
+            />
+
+            <Button type="submit" variant="primary" className="w-full mt-4" disabled={isSubmitting}>
+                {isSubmitting ? 'جاري الحفظ...' : (initialData ? 'تحديث العطاء' : 'نشر العطاء')}
+            </Button>
+        </form>
+    );
+}

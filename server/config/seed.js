@@ -1,56 +1,45 @@
 /**
- * Creates or updates the initial admin account from the environment.
- * Run manually, once per environment:  npm run seed
- *
- * The first admin is never created through POST /api/auth/register — that
- * endpoint whitelists `organization` and `individual` only (AGENTS.md §5,
- * SRS §2.6, FR-5.4).
+ * seed.js
+ * Script to create or update the initial system administrator account.
+ * Run manually via CLI; not imported by the running application.
  */
-require("dotenv").config({ quiet: true });
+require('dotenv').config({ path: '../server.env' });
+const mongoose = require('mongoose');
+const User = require('../models/user.model');
 
-const mongoose = require("mongoose");
-const connectToDatabase = require("./mongoose.config");
-const User = require("../models/user.model");
+mongoose.connect(process.env.MONGOOSE_URI)
+    .then(async () => {
+        console.log('Connected to DB for seeding');
 
-const seedAdmin = async () => {
-  const email = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD || "";
+        const adminEmail = process.env.ADMIN_EMAIL;
+        const adminPassword = process.env.ADMIN_PASSWORD;
 
-  if (!email || !password) {
-    console.error("[seed] ADMIN_EMAIL and ADMIN_PASSWORD must be set in server/.env");
-    process.exitCode = 1;
-    return;
-  }
+        if (!adminEmail || !adminPassword) {
+            console.error('Missing ADMIN_EMAIL or ADMIN_PASSWORD in .env');
+            process.exit(1);
+        }
 
-  await connectToDatabase();
+        let admin = await User.findOne({ email: adminEmail }).select('+password');
+        if (!admin) {
+            admin = new User({
+                name: 'System Admin',
+                email: adminEmail,
+                password: adminPassword,
+                role: 'admin',
+                status: 'approved'
+            });
+        } else {
+            admin.name = 'System Admin';
+            admin.password = adminPassword;
+            admin.role = 'admin';
+            admin.status = 'approved';
+        }
 
-  let admin = await User.findOne({ email }).select("+password");
-
-  if (admin) {
-    admin.name = admin.name || "مدير النظام";
-    admin.role = "admin";
-    admin.status = "approved";
-    // Re-applies the password from .env; the pre-save hook hashes it.
-    admin.password = password;
-    await admin.save();
-    console.log(`[seed] admin updated: ${admin.email}`);
-  } else {
-    admin = await User.create({
-      name: "مدير النظام",
-      email,
-      password,
-      role: "admin",
-      status: "approved",
+        await admin.save();
+        console.log('Admin seeded successfully');
+        process.exit(0);
+    })
+    .catch(err => {
+        console.error('Seed error:', err);
+        process.exit(1);
     });
-    console.log(`[seed] admin created: ${admin.email}`);
-  }
-};
-
-seedAdmin()
-  .catch((err) => {
-    console.error("[seed] failed:", err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await mongoose.connection.close();
-  });
