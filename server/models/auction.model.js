@@ -1,85 +1,89 @@
-const mongoose = require("mongoose");
+/**
+ * auction.model.js
+ * Mongoose schema and model for public auctions.
+ * Includes dynamic item fields, multi-image support, and bid tracking.
+ */
+const mongoose = require('mongoose');
 
-const AUCTION_STATUSES = ["pending_approval", "active", "ended", "cancelled"];
-
-const auctionSchema = new mongoose.Schema(
-  {
+const AuctionSchema = new mongoose.Schema({
     title: {
-      type: String,
-      required: [true, "عنوان المزاد مطلوب."],
-      trim: true,
+        type: String,
+        required: [true, "عنوان المزاد مطلوب"],
+        trim: true
     },
     description: {
-      type: String,
-      required: [true, "وصف المزاد مطلوب."],
-      trim: true,
+        type: String,
+        required: [true, "وصف المزاد مطلوب"],
+        trim: true
     },
     imageUrl: {
-      type: String,
+        type: String,
+        default: ''
+    },
+    images: {
+        type: [String],
+        default: []
+    },
+    officialDocumentUrl: {
+        type: String,
+        default: ''
+    },
+    officialDocumentName: {
+        type: String,
+        default: ''
+    },
+    itemFields: {
+        type: [{
+            key: { type: String, required: true, trim: true },
+            label: { type: String, required: true, trim: true },
+            value: { type: String, default: '', trim: true },
+            type: { type: String, enum: ['text', 'number', 'date'], default: 'text' },
+            required: { type: Boolean, default: false },
+            source: { type: String, enum: ['manual', 'document'], default: 'manual' }
+        }],
+        default: []
     },
     startingPrice: {
-      type: Number,
-      required: [true, "السعر الافتتاحي مطلوب."],
-      min: [0.01, "السعر الافتتاحي يجب أن يكون أكبر من صفر."],
+        type: Number,
+        required: [true, "السعر الافتتاحي مطلوب"],
+        min: [0.01, "السعر الافتتاحي يجب أن يكون أكبر من صفر"]
     },
     currentPrice: {
-      type: Number,
-      required: [true, "السعر الحالي مطلوب."],
-      min: [0, "السعر الحالي لا يمكن أن يكون سالباً."],
+        type: Number,
+        required: [true, "السعر الحالي مطلوب"],
+        default: function() { return this.startingPrice; },
+        min: [0, "السعر الحالي لا يمكن أن يكون سالباً"]
     },
     currentHighestBidder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, "منشئ المزاد مطلوب"]
     },
     endsAt: {
-      type: Date,
-      required: [true, "موعد انتهاء المزاد مطلوب."],
-      validate: {
-        // Enforced on creation and whenever the date itself is edited. Once an
-        // auction is running, closing it (FR-14.1) must not be blocked by a
-        // rule about when it was created — its endsAt is in the past by then.
-        validator: function (value) {
-          if (!this.isNew && typeof this.isModified === "function" && !this.isModified("endsAt")) {
-            return true;
-          }
-          return value > new Date();
-        },
-        message: "يجب أن يكون موعد الانتهاء في المستقبل.",
-      },
+        type: Date,
+        required: [true, "موعد انتهاء المزاد مطلوب"],
+        validate: {
+            validator: function(value) {
+                if (!this.isModified || !this.isModified('endsAt')) return true;
+                return value > new Date();
+            },
+            message: "يجب أن يكون موعد انتهاء المزاد في المستقبل"
+        }
     },
-      status: {
-      type: String,
-      enum: {
-        values: AUCTION_STATUSES,
-        message: "حالة المزاد غير صالحة.",
-      },
-      default: "pending_approval",
-    },
-    // FR-12.3-style rejection reason, mirroring User.rejectionReason for
-    // organizations — an admin may explain why a listing was refused.
-    rejectionReason: {
-      type: String,
-      trim: true,
-    },
-  },
-  { timestamps: true }
-);
+    status: {
+        type: String,
+        enum: ['pending_approval', 'active', 'ended', 'cancelled'],
+        default: 'pending_approval'
+    }
+}, { timestamps: true });
 
-// The opening price becomes the current price, set with the data rather than in
-// a controller so Sprint 07 can rely on currentPrice never being null.
-//
-// This runs on "validate", not "save": Mongoose validates before save hooks, so
-// a pre("save") assignment would arrive after `required` had already failed.
-auctionSchema.pre("validate", function () {
-  if (this.isNew) this.currentPrice = this.startingPrice;
+AuctionSchema.pre('save', function() {
+    if (this.isNew) this.currentPrice = this.startingPrice;
 });
 
-const Auction = mongoose.model("Auction", auctionSchema);
-
-module.exports = Auction;
-module.exports.AUCTION_STATUSES = AUCTION_STATUSES;
+module.exports = mongoose.model('Auction', AuctionSchema);

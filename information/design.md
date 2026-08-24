@@ -38,13 +38,14 @@ hard-coding hex values in components.
 |---|---|---|
 | `registry-green` | `#007A3D` | Primary buttons, active nav, "approved"/"open" status, links |
 | `green-dark` | `#005D2F` | Hover/active state of the above |
-| `flag-red` | `#CE1126` | Destructive actions, "rejected"/"closed" status, unread markers — used sparingly |
+
 | `ink` | `#17202A` | Headings, primary text, footer/nav dark surface |
 | `paper` | `#F7F8FA` | Page background |
 | `surface` | `#FFFFFF` | Cards, forms, tables, modals |
 | `border` | `#E5E7EB` | All hairline borders/dividers |
 | `text-secondary` | `#667085` | Metadata, helper text, timestamps |
 | `success` | `#16803C` | Completed / approved / won |
+| `info` | `#60A5FA` | Valid form-field state and neutral confirmation |
 | `warning` | `#D97706` | Pending / expiring soon |
 | `error` | `#C62828` | Validation errors, rejected, cancelled |
 
@@ -72,8 +73,13 @@ every status color with a text label (e.g. "قيد المراجعة", "مقبو�
 ## 4. Spacing, Radius, Motion
 
 - Border radius: `10–14px` on cards and inputs, `8px` on buttons/badges.
-- Borders: `1px solid var(--border)` — this project relies on borders, not
-  shadows, to separate sections.
+- Borders: use `1px solid var(--border)` for standard hairline dividers. For
+  high-interaction form surfaces that require stronger affordance, use the
+  existing `ink` token at controlled opacity with a `2px` border (for example,
+  `border-2 border-ink/15` on cards and `border-2 border-ink/20` on inputs).
+  Invalid fields use `error`; valid fields may use the light `info` token;
+  keyboard focus uses a thin `registry-green` outline.
+  This project relies on borders, not heavy shadows, to separate sections.
 - Shadow: reserve a single soft shadow (`0 4px 16px rgba(0,0,0,0.06)`) for
   modals/dropdowns only — cards and page sections stay flat.
 - Motion: transitions `150–200ms`, ease-out. Respect
@@ -97,10 +103,7 @@ every status color with a text label (e.g. "قيد المراجعة", "مقبو�
   key-value metadata (deadline, reference number, budget, current bid) used
   on tender/auction detail pages instead of a decorative info card.
 
-No lattice texture, hero illustration, or logo mark assets exist for this
-project — do not fabricate or reuse PalTenders' asset URLs. If a hero image
-is wanted later, use a simple solid-color or subtle-pattern CSS background,
-not an external image.
+**Visual Assets & Imagery**: The project uses original, photorealistic editorial photography generated for the Palestinian market (e.g., `palestine-urban-horizon-hero.jpg`, `palestine-stone-laptop.jpg`, `palestine-arch-opportunity.jpg`) rather than generic SaaS illustrations. It also uses a custom `Icon` component with local motifs (olive branch, shield, gavel) and CSS-based patterns (`palestine-pattern`, `palestine-dots`) inspired by traditional tatreez geometry.
 
 ---
 
@@ -120,7 +123,7 @@ extra screens beyond what the SRS's functional requirements require.
 | Auction list (public) | Card grid, current price shown with tabular numerals, status stamp (`pending_approval` never shown publicly) |
 | Auction detail | Current price prominent (Noto Kufi Arabic numerals), bid form, live-updating price via polling with a subtle "updated" pulse, bid history list |
 | Individual: "my auctions" | Simple table — auction name, your bid, status (winning/outbid/won/lost) |
-| Notifications | Simple list, unread items marked with `flag-red` dot, not a full color-inverted row |
+| Notifications | Simple list, unread items marked with `registry-green` dot, not a full color-inverted row |
 
 ---
 
@@ -133,36 +136,32 @@ extra screens beyond what the SRS's functional requirements require.
 - Empty states (no tenders, no auctions, no proposals yet) show a short
   explanatory sentence, not a blank area (NFR-U5).
 - Destructive actions (delete tender, reject organization/proposal) use
-  `flag-red` and require a confirm step — visually distinct from
+  `error` and require a confirm step — visually distinct from
   non-destructive actions (NFR-U4).
 
 ---
 
 ## 8. Tailwind Setup Note
 
-Keep this to plain Tailwind utility classes plus the color tokens above —
-no component library, no custom design-token build step beyond the
-`tailwind.config.js` color extension. Example:
+This project uses **Tailwind CSS v4** via the `@tailwindcss/vite` plugin. Design tokens are defined CSS-first in `client/src/index.css` using the `@theme` directive, not in a `tailwind.config.js` file.
 
-```js
-// tailwind.config.js
-export default {
-  theme: {
-    extend: {
-      colors: {
-        'registry-green': '#007A3D',
-        'green-dark': '#005D2F',
-        'flag-red': '#CE1126',
-        ink: '#17202A',
-        paper: '#F7F8FA',
-        surface: '#FFFFFF',
-        border: '#E5E7EB',
-        'text-secondary': '#667085',
-        success: '#16803C',
-        warning: '#D97706',
-        error: '#C62828',
-      },
-    },
-  },
-};
+```css
+/* client/src/index.css */
+@import "tailwindcss";
+
+@theme {
+  --color-registry-green: #007A3D;
+  --color-green-dark: #005D2F;
+
+  --color-ink: #17202A;
+  --color-paper: #F7F8FA;
+  --color-surface: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-text-secondary: #667085;
+  --color-success: #16803C;
+  --color-warning: #D97706;
+  --color-error: #C62828;
+  --font-sans: "IBM Plex Sans Arabic", sans-serif;
+  --font-display: "Noto Kufi Arabic", sans-serif;
+}
 ```

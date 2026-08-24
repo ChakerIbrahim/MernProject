@@ -1,18 +1,10 @@
-# dependencies
 node_modules/
-
-# environment & secrets (C-4, NFR-S4) — never commit a filled-in env file
 .env
 .env.*
 !.env.example
 server.env
-
-# locally stored uploads (L-4: local disk storage in the MVP)
-uploads/
-
-# build output
-dist/
-
-# logs
+server/uploads/
 *.log
-npm-debug.log*
+client/.env.local
+client/.env.*.local
+client/dist/

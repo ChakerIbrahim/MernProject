@@ -1,235 +1,188 @@
-const BidProposal = require("../models/bidProposal.model");
-const Tender = require("../models/tender.model");
-const { discardUploadedFile } = require("../config/multer.config");
-
-const SELF_BID_MESSAGE = "لا يمكنك تقديم عرض على عطاء تملكه.";
-const DUPLICATE_MESSAGE = "لقد قدّمت عرضاً على هذا العطاء مسبقاً.";
-const CLOSED_TENDER_MESSAGE = "لا يمكن تقديم عرض على عطاء مغلق أو ملغى.";
-
-const httpError = (status, message) => {
-  const err = new Error(message);
-  err.status = status;
-  err.expose = true;
-  return err;
-};
-
-const fieldError = (field, message) => {
-  const err = new Error("validation failed");
-  err.status = 400;
-  err.errors = { [field]: message };
-  return err;
-};
+const BidProposal = require('../models/bidProposal.model');
+const Tender = require('../models/tender.model');
 
 /**
- * POST /api/tenders/:id/proposals — FR-9
- *
- * multer has already written the document by the time this runs, so every
- * rejection path discards it rather than leaving an orphan on disk.
+ * Submits a new proposal for a specific tender.
+ * Expects form-data with a document file and finalPrice.
+ * Enforces the rule that an owner cannot bid on their own tender.
+ * Returns the created proposal object.
  */
-const submitProposal = async (req, res, next) => {
-  try {
-    const tender = await Tender.findById(req.params.id);
-
-    if (!tender) {
-      discardUploadedFile(req.file);
-      return next(httpError(404, "العطاء المطلوب غير موجود."));
-    }
-
-    if (tender.status !== "open") {
-      discardUploadedFile(req.file);
-      return next(httpError(400, CLOSED_TENDER_MESSAGE));
-    }
-
-    if (String(tender.createdBy) === String(req.user._id)) {
-      discardUploadedFile(req.file);
-      return next(httpError(403, SELF_BID_MESSAGE));
-    }
-
-    const existing = await BidProposal.findOne({
-      tender: tender._id,
-      submittedBy: req.user._id,
-    });
-    if (existing) {
-      discardUploadedFile(req.file);
-      return next(httpError(400, DUPLICATE_MESSAGE));
-    }
-
-    if (!req.file) {
-      return next(fieldError("proposalDocument", "مستند العرض مطلوب."));
-    }
-
-    const proposal = new BidProposal({
-      tender: tender._id,
-      submittedBy: req.user._id,
-      documentUrl: `/uploads/${req.file.filename}`,
-      finalPrice: req.body.finalPrice,
-      status: "submitted",
-    });
-
+module.exports.submitProposal = async (req, res, next) => {
     try {
-      await proposal.validate();
-    } catch (schemaError) {
-      discardUploadedFile(req.file);
-      const errors = {};
-      for (const field of Object.keys(schemaError.errors || {})) {
-        errors[field] = schemaError.errors[field].message;
-      }
-      const err = new Error("validation failed");
-      err.status = 400;
-      err.errors = errors;
-      return next(err);
-    }
+        const tenderId = req.params.id;
+        const tender = await Tender.findById(tenderId);
 
+        if (!tender) {
+            return res.status(404).json({ error: "العطاء غير موجود" });
+        }
+
+        if (tender.status !== 'open') {
+            return res.status(400).json({ error: "لا يمكن تقديم عروض على عطاء مغلق أو ملغى" });
+        }
+
+        if (tender.createdBy.toString() === req.user.id) {
+            return res.status(403).json({ error: "لا يمكنك تقديم عرض على عطاء تملكه" });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ errors: { document: "مستند العرض مطلوب" } });
+        }
+
+        // Validate magic numbers for PDF (similar to auth controller)
+        try {
+            const { fileTypeFromFile } = await import('file-type');
+            const type = await fileTypeFromFile(req.file.path);
+
+            const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            if (!type || !allowedMimeTypes.includes(type.mime)) {
+                const fs = require('fs');
+                fs.unlinkSync(req.file.path);
+                return res.status(400).json({ errors: { document: 'الملف غير مدعوم، يرجى رفع صورة أو ملف PDF' } });
+            }
+        } catch (e) {
+            console.error("File type check failed", e);
+        }
+
+        const documentUrl = `/uploads/${req.file.filename}`;
+
+        let aiExtractedData = undefined;
+        if (req.body.aiExtractedData) {
+            try {
+                aiExtractedData = JSON.parse(req.body.aiExtractedData);
+            } catch (e) {
+                // Ignore parse errors, just don't save the AI data
+            }
+        }
+
+        const proposal = await BidProposal.create({
+            tender: tenderId,
+            submittedBy: req.user.id,
+            documentUrl,
+            finalPrice: req.body.finalPrice,
+            aiExtractedData,
+            status: 'submitted'
+        });
+
+        res.status(201).json({ proposal });
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(400).json({ error: "لقد قدّمت عرضاً على هذا العطاء مسبقاً" });
+        }
+        next(err);
+    }
+};
+
+/**
+ * Retrieves all proposals submitted by the currently authenticated organization.
+ * Returns a JSON object containing the proposals array.
+ */
+module.exports.listMyProposals = async (req, res, next) => {
     try {
-      await proposal.save();
-    } catch (saveError) {
-      discardUploadedFile(req.file);
-      if (saveError.code === 11000) {
-        return next(httpError(400, DUPLICATE_MESSAGE));
-      }
-      throw saveError;
-    }
+        const proposals = await BidProposal.find({ submittedBy: req.user.id })
+            .populate({
+                path: 'tender',
+                select: 'title status createdBy',
+                populate: { path: 'createdBy', select: 'companyName name' }
+            })
+            .sort({ createdAt: -1 });
 
-    res.json({ proposal });
-  } catch (err) {
-    discardUploadedFile(req.file);
-    next(err);
-  }
+        res.status(200).json({ proposals });
+    } catch (err) {
+        next(err);
+    }
 };
 
 /**
- * GET /api/tenders/:id/proposals — FR-11.1
+ * Retrieves all proposals submitted against a specific tender.
+ * Restricted to the tender owner or an admin.
+ * Returns a JSON object containing the proposals array.
  */
-const listProposalsForTender = async (req, res, next) => {
-  try {
-    const proposals = await BidProposal.find({ tender: req.resource._id })
-      .populate("submittedBy", "companyName email")
-      .sort({ createdAt: -1 });
+module.exports.listProposalsForTender = async (req, res, next) => {
+    try {
+        const tenderId = req.params.id;
+        const tender = await Tender.findById(tenderId);
 
-    res.json({ proposals });
-  } catch (err) {
-    next(err);
-  }
+        if (!tender) {
+            return res.status(404).json({ error: "العطاء غير موجود" });
+        }
+
+        // Only owner or admin can view proposals
+        if (tender.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: "لا تملك الصلاحية لعرض هذه العروض" });
+        }
+
+        const proposals = await BidProposal.find({ tender: tenderId })
+            .populate('submittedBy', 'companyName name email')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({ proposals });
+    } catch (err) {
+        next(err);
+    }
 };
 
 /**
- * GET /api/proposals?mine=true — the submitting organization's own proposals.
+ * Updates the status of a proposal (e.g., accepted, rejected).
+ * Restricted to the owner of the tender.
+ * Returns the updated proposal object.
  */
-const listMyProposals = async (req, res, next) => {
-  try {
-    const proposals = await BidProposal.find({ submittedBy: req.user._id })
-      .populate("tender", "title category status createdBy")
-      .sort({ createdAt: -1 });
+module.exports.updateProposalStatus = async (req, res, next) => {
+    try {
+        const { status } = req.body;
+        if (!['accepted', 'rejected'].includes(status)) {
+            return res.status(400).json({ error: "حالة غير صالحة" });
+        }
 
-    res.json({ proposals });
-  } catch (err) {
-    next(err);
-  }
+        const proposal = await BidProposal.findById(req.params.id).populate('tender');
+
+        if (!proposal) {
+            return res.status(404).json({ error: "العرض غير موجود" });
+        }
+
+        // Only tender owner can change status
+        if (proposal.tender.createdBy.toString() !== req.user.id) {
+            return res.status(403).json({ error: "لا تملك الصلاحية لتغيير حالة هذا العرض" });
+        }
+
+        proposal.status = status;
+        await proposal.save();
+
+
+        res.status(200).json({ proposal });
+    } catch (err) {
+        next(err);
+    }
 };
 
 /**
- * GET /api/proposals/:id
+ * Retrieves a single proposal by its ID.
+ * Restricted to the submitter, the tender owner, or an admin.
+ * Returns the populated proposal object.
  */
-const getProposalById = async (req, res, next) => {
-  try {
-    const proposal = await BidProposal.findById(req.params.id)
-      .populate("submittedBy", "companyName")
-      .populate("tender", "title createdBy status");
+module.exports.getProposalById = async (req, res, next) => {
+    try {
+        const proposal = await BidProposal.findById(req.params.proposalId)
+            .populate('submittedBy', 'companyName name')
+            .populate({
+                path: 'tender',
+                select: 'title createdBy',
+                populate: { path: 'createdBy', select: 'companyName name' }
+            });
 
-    if (!proposal) return next(httpError(404, "العرض المطلوب غير موجود."));
+        if (!proposal) {
+            return res.status(404).json({ error: "العرض غير موجود" });
+        }
 
-    const callerId = String(req.user._id);
-    const isAdmin = req.user.role === "admin";
-    const isSubmitter = String(proposal.submittedBy?._id) === callerId;
-    const isTenderOwner = String(proposal.tender?.createdBy) === callerId;
+        const tenderOwnerId = proposal.tender.createdBy.toString();
+        const submitterId = proposal.submittedBy._id.toString();
 
-    if (!isAdmin && !isSubmitter && !isTenderOwner) {
-      const err = new Error("forbidden");
-      err.status = 403;
-      return next(err);
+        // Only tender owner, submitter, or admin can view
+        if (req.user.id !== tenderOwnerId && req.user.id !== submitterId && req.user.role !== 'admin') {
+            return res.status(403).json({ error: "لا تملك الصلاحية لعرض هذا العرض" });
+        }
+
+        res.status(200).json({ proposal });
+    } catch (err) {
+        next(err);
     }
-
-    res.json({ proposal });
-  } catch (err) {
-    next(err);
-  }
-};
-
-const DECISIONS = ["accepted", "rejected"];
-
-/**
- * PATCH /api/proposals/:id — FR-10.3
- */
-const updateProposalPrice = async (req, res, next) => {
-  try {
-    const proposal = await BidProposal.findById(req.params.id);
-    if (!proposal) return next(httpError(404, "العرض المطلوب غير موجود."));
-
-    if (String(proposal.submittedBy) !== String(req.user._id)) {
-      const err = new Error("forbidden");
-      err.status = 403;
-      return next(err);
-    }
-
-    if (proposal.status !== "submitted") {
-      return next(httpError(400, "لا يمكن تعديل عرض تمت معالجته."));
-    }
-
-    const finalPrice = Number(req.body.finalPrice);
-    if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
-      return next(fieldError("finalPrice", "يرجى إدخال سعر صحيح."));
-    }
-
-    proposal.finalPrice = finalPrice;
-    await proposal.save();
-
-    res.json({ proposal });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * PATCH /api/proposals/:id/status — FR-11.2
- */
-const updateProposalStatus = async (req, res, next) => {
-  try {
-    const proposal = await BidProposal.findById(req.params.id)
-      .populate("tender", "createdBy title")
-      .populate("submittedBy", "companyName email");
-    if (!proposal) return next(httpError(404, "العرض المطلوب غير موجود."));
-
-    if (String(proposal.tender?.createdBy) !== String(req.user._id)) {
-      const err = new Error("forbidden");
-      err.status = 403;
-      return next(err);
-    }
-
-    if (!DECISIONS.includes(req.body.status)) {
-      const err = new Error("validation failed");
-      err.status = 400;
-      err.errors = { status: "القرار غير صالح. اختر قبول العرض أو رفضه." };
-      return next(err);
-    }
-
-    if (proposal.status !== "submitted") {
-      return next(httpError(400, "تمت معالجة هذا العرض مسبقاً."));
-    }
-
-    proposal.status = req.body.status;
-    await proposal.save();
-
-    res.json({ proposal });
-  } catch (err) {
-    next(err);
-  }
-};
-
-module.exports = {
-  submitProposal,
-  listMyProposals,
-  listProposalsForTender,
-  getProposalById,
-  updateProposalPrice,
-  updateProposalStatus,
 };

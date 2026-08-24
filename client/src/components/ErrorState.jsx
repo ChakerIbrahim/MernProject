@@ -1,24 +1,20 @@
-import Button from "./Button";
+import React from 'react';
+import Button from './Button';
 
-/**
- * A failed load. The message is always a written Arabic sentence — never a
- * raw exception or an HTTP status code.
- *
- * @param {string} message
- * @param {() => void} [onRetry]
- */
-const ErrorState = ({ message = "تعذّر تحميل البيانات. حاول مرة أخرى.", onRetry }) => (
-  <div
-    role="alert"
-    className="flex flex-col items-center gap-4 rounded-card border border-error bg-surface px-6 py-10 text-center"
-  >
-    <p className="text-error">{message}</p>
-    {onRetry ? (
-      <Button variant="secondary" onClick={onRetry}>
-        إعادة المحاولة
-      </Button>
-    ) : null}
-  </div>
-);
-
-export default ErrorState;
+export default function ErrorState({ message, onRetry }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+      <div className="text-error">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <p className="text-ink font-medium">{message}</p>
+      {onRetry && (
+        <Button variant="secondary" onClick={onRetry}>
+          إعادة المحاولة
+        </Button>
+      )}
+    </div>
+  );
+}

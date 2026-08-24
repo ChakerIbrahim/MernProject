@@ -1,36 +1,37 @@
-const mongoose = require("mongoose");
-
 /**
- * FR-15.1 — a message thread between a tender owner and the organization whose
- * proposal was accepted.
- *
- * Not specified in SRS §5: Phase 5 is a stretch goal (SRS §3.6, L-10), so this
- * is kept minimal and shaped like the existing entities.
+ * negotiationMessage.model.js
+ * Mongoose schema and model for individual chat messages.
+ * Messages can be linked to either a BidProposal or a ChatRequest.
  */
-const negotiationMessageSchema = new mongoose.Schema(
-  {
+const mongoose = require('mongoose');
+
+const NegotiationMessageSchema = new mongoose.Schema({
     proposal: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "BidProposal",
-      required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'BidProposal'
+        // No longer strictly required, as chatRequest might be used instead
+    },
+    chatRequest: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ChatRequest'
     },
     sender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, "المرسل مطلوب"]
     },
     body: {
-      type: String,
-      required: [true, "نص الرسالة مطلوب."],
-      trim: true,
-      maxlength: [2000, "الرسالة طويلة جداً. الحد الأقصى 2000 حرف."],
+        type: String,
+        required: [true, "نص الرسالة مطلوب"],
+        trim: true
     },
-  },
-  { timestamps: true }
-);
+    isRead: {
+        type: Boolean,
+        default: false
+    }
+}, { timestamps: { createdAt: true, updatedAt: false } });
 
-// The thread is read oldest-first on every open, and polled while it is on
-// screen. Without this index that query degrades as the thread grows.
-negotiationMessageSchema.index({ proposal: 1, createdAt: 1 });
+NegotiationMessageSchema.index({ proposal: 1, createdAt: 1 });
+NegotiationMessageSchema.index({ chatRequest: 1, createdAt: 1 });
 
-module.exports = mongoose.model("NegotiationMessage", negotiationMessageSchema);
+module.exports = mongoose.model('NegotiationMessage', NegotiationMessageSchema);

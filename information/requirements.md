@@ -1,106 +1,96 @@
-# وثيقة المتطلبات — منصة المشتريات والمزادات (MVP)
+# Requirements Document — Procurement & Auction Platform (MVP)
 
-مبنية على الأدوار الثلاثة (Admin, Organization, Individual) والمراحل الخمس المتفق عليها سابقاً.
-
----
-
-## 1. المتطلبات الوظيفية (Functional Requirements)
-
-### FR-1 — المصادقة والحسابات (Phase 1)
-
-| # | المتطلب | الدور |
-|---|---|---|
-| FR-1.1 | يقدر المستخدم (مؤسسة أو فرد) يسجّل حساب جديد بإيميل وباسورد | مؤسسة / فرد |
-| FR-1.2 | يقدر المستخدم يسجّل دخول ببيانات صحيحة ويستلم JWT | الكل |
-| FR-1.3 | حساب المؤسسة يبقى بحالة `pending` لحد ما الأدمن يوافق عليه | مؤسسة |
-| FR-1.4 | حساب الفرد يُفعَّل فوراً بدون مراجعة | فرد |
-| FR-1.5 | الأدمن يقدر يشوف قائمة كل المؤسسات `pending` | Admin |
-| FR-1.6 | الأدمن يقدر يوافق أو يرفض طلب مؤسسة (مع سبب اختياري للرفض) | Admin |
-| FR-1.7 | عند الموافقة/الرفض، تنبعث رسالة إيميل تلقائية للمؤسسة عبر EmailJS | النظام |
-| FR-1.8 | أي مستخدم يقدر يسجّل خروج (حذف التوكن من جهة الـ Client) | الكل |
-| FR-1.9 | كلمة المرور لازم تكون مشفّرة (bcrypt) قبل التخزين، بدون استثناء | النظام |
-
-### FR-2 — إدارة العطاءات (Phase 2)
-
-| # | المتطلب | الدور |
-|---|---|---|
-| FR-2.1 | المؤسسة الموافَق عليها تقدر تنشئ عطاء جديد (عنوان، وصف، فئة، ميزانية تقديرية، موعد نهائي) | Organization |
-| FR-2.2 | أي مستخدم مسجّل يقدر يتصفح العطاءات المفتوحة مع فلترة (فئة، قيمة) | مسجَّل |
-| FR-2.3 | المؤسسة صاحبة العطاء تقدر تعدّله أو تحذفه/توقفه قبل انتهاء الموعد | Organization (المالك) |
-| FR-2.4 | الأدمن يقدر يوقف أو يحذف أي عطاء مخالف بغض النظر عن المالك | Admin |
-| FR-2.5 | مؤسسة تانية تقدر تقدّم عرض (Proposal) على عطاء مفتوح برفع مستند (سعر + تفاصيل) | Organization |
-| FR-2.6 | لا يقدر مستخدم يقدّم عرض على عطاء هو نفسه صاحبه | النظام |
-| FR-2.7 | لا يقدر مستخدم يقدّم أكثر من عرض واحد على نفس العطاء | النظام |
-
-### FR-3 — تحليل الذكاء الاصطناعي (Phase 3)
-
-| # | المتطلب | الدور |
-|---|---|---|
-| FR-3.1 | عند رفع مستند العرض، يستدعي النظام Gemini API لتحليله واستخراج (سعر، ملخص) | النظام |
-| FR-3.2 | نتيجة التحليل تُعرض للمؤسسة مع `confidenceScore` قبل التأكيد النهائي | Organization |
-| FR-3.3 | المؤسسة تقدر تعدّل السعر المستخرَج يدوياً قبل الإرسال النهائي (الـ AI اقتراح، مش قرار ملزم) | Organization |
-| FR-3.4 | لو فشل تحليل الـ AI (خطأ شبكة/API)، يقدر المستخدم يكمل ويدخل البيانات يدوياً | النظام |
-| FR-3.5 | صاحب العطاء يقدر يشوف كل العروض المقدَّمة عليه مع بيانات الـ AI المستخرجة لكل عرض | Organization (صاحبة العطاء) |
-| FR-3.6 | صاحب العطاء يقدر يقبل أو يرفض عرض معيّن | Organization (صاحبة العطاء) |
-| FR-3.7 | عند قبول/رفض عرض، تنبعث رسالة إيميل تلقائية لمقدّم العرض عبر EmailJS | النظام |
-
-### FR-4 — المزادات (Phase 4)
-
-| # | المتطلب | الدور |
-|---|---|---|
-| FR-4.1 | المؤسسة تقدر تطرح مزاد جديد (عنوان، وصف، صورة، سعر افتتاحي، موعد انتهاء) | Organization |
-| FR-4.2 | المزاد يبقى بحالة `pending_approval` لحد ما الأدمن يوافق عليه قبل النشر | النظام |
-| FR-4.3 | أي زائر/مستخدم يقدر يتصفح المزادات النشطة (بدون تسجيل دخول للتصفح فقط) | عام |
-| FR-4.4 | الفرد المسجَّل بس يقدر يقدّم مزايدة على مزاد نشط | Individual |
-| FR-4.5 | المزايدة لازم تكون أعلى من السعر الحالي، وإلا تُرفض بخطأ واضح | النظام |
-| FR-4.6 | السعر الحالي يتحدّث لكل المتابعين خلال 3-5 ثواني (Polling) | النظام |
-| FR-4.7 | عند انتهاء وقت المزاد، يُقفل تلقائياً ويُعلن صاحب أعلى مزايدة فائز | النظام |
-| FR-4.8 | الفائز يستلم إشعار داخل النظام + إيميل عبر EmailJS | النظام |
-| FR-4.9 | الفرد يقدر يشوف "سجل مزاداتي" (اللي شارك فيها وحالتها) | Individual |
-
-### FR-5 — التفاوض وتوليد العقد (Phase 5 — اختياري)
-
-| # | المتطلب | الدور |
-|---|---|---|
-| FR-5.1 | بعد قبول عرض، تُفتح غرفة تفاوض بسيطة بين الطرفين (رسائل نصية) | Organization × 2 |
-| FR-5.2 | صاحب العطاء يقدر يطلب توليد مسودة عقد أولية بالـ AI بناءً على بيانات العرض المقبول | Organization (صاحبة العطاء) |
-| FR-5.3 | مسودة العقد تُعرض كنص قابل للمراجعة، وليست ملزمة قانونياً بدون توقيع خارج النظام | النظام |
+This document defines the functional and non-functional requirements for the "Etimad" (اعتماد) platform, based on the authoritative Software Requirements Specification (SRS) and reflecting the actual implemented product architecture (including Socket.io for chat, dynamic AI forms, and email verification).
 
 ---
 
-## 2. المتطلبات غير الوظيفية (Non-Functional Requirements)
+## 1. Functional Requirements (FR)
 
-| الفئة | المتطلب |
+### FR-1: Identity, Access & Onboarding
+
+| ID | Requirement | Role |
+|---|---|---|
+| FR-1.1 | Users can register as an Organization or Individual using email, password, and required proof documents. | Org / Ind |
+| FR-1.2 | Registration routes through a `TemporaryUser` state; users must verify their email via a code sent by EmailJS before the final account is created. | Org / Ind |
+| FR-1.3 | Individual accounts require a National ID upload. AI analyzes the ID to ensure it matches the provided name and is a valid document. | Individual |
+| FR-1.4 | Organization accounts require a commercial register document and remain in a `pending` state until reviewed by an Admin. | Organization |
+| FR-1.5 | Admins can view a list of pending organizations, inspect their proof documents, and approve or reject them. | Admin |
+| FR-1.6 | Upon approval or rejection, an automated email is sent to the organization via EmailJS. | System |
+| FR-1.7 | Users can log in with valid credentials and receive a JWT for authentication. | All |
+| FR-1.8 | Passwords must be hashed using `bcrypt` before storage. | System |
+
+### FR-2: Tenders & Proposals
+
+| ID | Requirement | Role |
+|---|---|---|
+| FR-2.1 | Approved Organizations can create a new tender by uploading an official book (document). | Organization |
+| FR-2.2 | AI analyzes the official book to extract key tender information and pre-fills a dynamic form for the user to review/edit before publishing. | System |
+| FR-2.3 | Any registered user can browse open tenders. | Registered |
+| FR-2.4 | Approved Organizations can submit a proposal to an open tender by uploading a technical/financial document. | Organization |
+| FR-2.5 | Users cannot submit a proposal to their own tender. | System |
+| FR-2.6 | Tender owners can view all received proposals. | Org (Owner) |
+| FR-2.7 | Tender owners can trigger AI analysis on received proposals to extract the final price and a summary for easier comparison. | Org (Owner) |
+| FR-2.8 | Admins can close or remove any tender for moderation purposes. | Admin |
+
+### FR-3: Auctions & Bidding
+
+| ID | Requirement | Role |
+|---|---|---|
+| FR-3.1 | Approved Organizations can create an auction by uploading a product specification document. | Organization |
+| FR-3.2 | AI analyzes the product document to generate dynamic product properties (e.g., model, color, condition) for the auction listing. | System |
+| FR-3.3 | Auctions display a real-time countdown timer. | All |
+| FR-3.4 | Both approved Individuals and Organizations can place bids on active auctions. | Ind / Org |
+| FR-3.5 | A new bid must be strictly higher than the current highest bid plus any minimum increment. | System |
+| FR-3.6 | Auction owners cannot bid on their own auctions. Admins cannot bid on any auction. | System |
+| FR-3.7 | When the countdown expires, the auction closes automatically, and the highest bidder is recorded. | System |
+
+### FR-4: Real-time Chat & Negotiation
+
+| ID | Requirement | Role |
+|---|---|---|
+| FR-4.1 | Organizations can request a chat with a tender owner, or owners can initiate chat after accepting a proposal. | Organization |
+| FR-4.2 | Chat utilizes Socket.io for real-time, instant message delivery without manual page refreshing. | System |
+| FR-4.3 | Chat interfaces feature an internally scrollable message history that auto-scrolls to the newest message. | All |
+| FR-4.4 | The system maintains a global unread message count, displaying a badge in the application header. | System |
+| FR-4.5 | Socket.io emits global notifications to update the unread badge instantly when a user receives a message. | System |
+
+---
+
+## 2. Non-Functional Requirements (NFR)
+
+| Category | Requirement |
 |---|---|
-| **الأمان** | كل الـ Endpoints المحمية تتحقق من JWT قبل تنفيذ أي منطق. الأدوار تُفحص عبر Middleware منفصل (`isRole`). كلمات المرور مشفّرة دايماً. مفاتيح الـ API (Gemini, EmailJS) بالـ `.env` فقط. |
-| **الأداء** | استجابة الـ API لا تتجاوز 2 ثانية بالحالات العادية (باستثناء تحليل Gemini اللي ممكن ياخد أطول). الـ Polling للمزادات كل 3-5 ثواني، مش أسرع، تجنّباً لحمل زائد على السيرفر. |
-| **قابلية الاستخدام** | الواجهة بالعربي بالكامل. رسائل الخطأ واضحة ومفهومة للمستخدم (مش رسائل تقنية خام). التصميم متجاوب (Responsive) على الموبايل، بما إنه غالبية الأفراد رح يستخدموا الموبايل. |
-| **الموثوقية** | فشل استدعاء الـ AI أو EmailJS ما لازم يوقف العملية الأساسية (Graceful Degradation) — البيانات بقاعدة البيانات هي مصدر الحقيقة دايماً. |
-| **قابلية التوسّع** | البنية (Schema + API) مصمّمة بحيث تقدر تستوعب لاحقاً: Socket.io بدل Polling، Cloudinary بدل التخزين المحلي، بوابة دفع حقيقية — بدون تغيير جذري بالـ Contract. |
-| **قابلية الصيانة** | كل استدعاءات Gemini معزولة بملف واحد (`ai.controller.js`). كل استدعاءات EmailJS عبر Helper واحد مشترك. لا تكرار منطق التحقق من الأدوار بكل Route. |
-| **التوافق** | يعمل على أحدث نسختين من Chrome وFirefox. Node.js 18+ وMongoDB 6+ كحد أدنى (متوافق مع AGENTS.md). |
+| **Security (NFR-S)** | All protected endpoints must verify the JWT via middleware (`isAuth`). Roles are checked via a separate middleware (`isRole`). Passwords are never stored in plain text. API keys (Gemini, EmailJS) exist only in `.env`. Rate limiting and Helmet are applied to the Express server. |
+| **Performance (NFR-P)** | API responses should generally return within 2 seconds, excluding AI processing times. Socket.io is used for chat to prevent heavy HTTP polling overhead. |
+| **Usability (NFR-U)** | The user interface is strictly Arabic (RTL). Error messages must be user-friendly (e.g., "كلمة المرور غير صحيحة" rather than raw stack traces). The design must be fully responsive, ensuring no horizontal scrolling on mobile devices (360px width). |
+| **Resilience (NFR-R)** | Graceful Degradation: If AI extraction fails (network error, invalid JSON), the system must allow the user to continue by entering the data manually. If EmailJS fails, the core database transaction (e.g., user registration) must still succeed. |
+| **Architecture (NFR-A)** | The frontend utilizes Tailwind CSS v4 semantic tokens (`bg-paper`, `text-ink`) to support a seamless global Dark Mode. AI logic is isolated in specific controllers. EmailJS logic is isolated in a helper utility. |
+| **Compatibility (NFR-C)** | The application requires Node.js 18+ and MongoDB 6+. It must run on modern versions of Chrome, Safari, and Firefox. |
 
 ---
 
-## 3. خارج النطاق صراحة (Out of Scope — MVP)
+## 3. Out of Scope (MVP)
 
-هاي مذكورة سابقاً بوثيقة النطاق، بس بتنعاد هون كمرجع سريع:
-
-- تعدّد العملات وتحويل الأسعار الفوري.
-- نظام تأهيل مسبق (Pre-qualification) معقّد.
-- نظام طعون واعتراضات رسمي متعدد المستويات.
-- سجل تدقيق (Audit Trail) كامل غير قابل للتعديل.
-- بوابة دفع حقيقية (تُستبدل بمحاكاة Simulation).
-- إشعارات SMS/Push حقيقية (تُستبدل بإشعارات داخل النظام + EmailJS).
-- WebSockets/Socket.io (تُستبدل بـ Polling).
+The following features are explicitly excluded from the MVP scope:
+- Multi-currency support or live currency conversion.
+- Complex multi-tier pre-qualification workflows.
+- Formal legal dispute or appeal workflows.
+- Immutable blockchain-style audit trails.
+- Real payment gateway integration (bidding represents a commitment, but payment occurs outside the platform).
+- SMS or Push notifications (EmailJS and in-app socket notifications are used instead).
+- English localization (The MVP is strictly Arabic RTL).
 
 ---
 
-## 4. معايير القبول العامة (Definition of Done لكل Phase)
+## 4. Definition of Done (DoD)
 
-Phase تُعتبر مكتملة فقط إذا:
+A sprint or feature is only considered "Done" when the following criteria are met:
 
-1. كل الـ Functional Requirements المرتبطة فيها تشتغل فعلياً (مو mockup).
-2. تم اختبارها يدوياً عبر Postman لكل Endpoint (نجاح + حالة خطأ واحدة على الأقل).
-3. الأخطاء المتوقعة (بيانات ناقصة، صلاحية غير كافية، مورد غير موجود) بترجع Status Code صحيح مش 500 عام.
-4. الواجهة (Frontend) متربطة فعلياً بالـ API ومش بيانات وهمية (mock data) — إلا لو صرّحت إنها placeholder مؤقت.
+1. **Functionality:** Every functional requirement listed in the sprint works end-to-end (no mockups or stubs).
+2. **API Testing:** Endpoints have been tested (via UI or Postman) for both success and expected failure cases.
+3. **Error Handling:** Expected failures return correct HTTP status codes (`400` Validation, `401` Unauthorized, `403` Forbidden, `404` Not Found), not generic `500` errors.
+4. **Integration:** The React frontend is wired to the real Express API. No hardcoded mock data remains.
+5. **UI States:** All data-fetching screens handle four states: Loading, Error, Empty, and Data.
+6. **RTL Compliance:** CSS uses logical properties (`ps-`, `me-`) instead of physical properties (`pl-`, `mr-`).
+7. **Localization:** All user-facing text is in Arabic.
+8. **Responsiveness:** The layout does not break or overflow horizontally on mobile viewports.

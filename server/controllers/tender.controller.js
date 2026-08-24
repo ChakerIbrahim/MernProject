@@ -1,180 +1,171 @@
-const Tender = require("../models/tender.model");
-const { TENDER_STATUSES } = require("../models/tender.model");
+const Tender = require('../models/tender.model');
 
-// Fields a client may set. Anything else in the body is ignored — createdBy
-// and status in particular are derived, never accepted.
-const WRITABLE_FIELDS = ["title", "description", "category", "budgetEstimate", "deadline"];
+/**
+ * Creates a new procurement tender.
+ * Validates manual fields, custom AI fields, and priority selections.
+ * Returns the created tender object.
+ */
+module.exports.createTender = async (req, res, next) => {
+    try {
+        const { title, description, category, budgetEstimate, deadline, officialBookUrl, officialBookName } = req.body;
+        const allowedPriorityFields = ['title', 'description', 'category', 'budgetEstimate', 'deadline'];
+        let priorityFields = [];
+        try {
+            priorityFields = req.body.priorityFields ? JSON.parse(req.body.priorityFields) : [];
+        } catch (parseError) {
+            return res.status(400).json({ errors: { priorityFields: 'بيانات الأولويات غير صالحة' } });
+        }
+        priorityFields = Array.isArray(priorityFields) ? [...new Set(priorityFields.filter((field) => allowedPriorityFields.includes(field)))] : [];
+        if (!officialBookUrl) {
+            return res.status(400).json({ errors: { officialBook: 'الكتاب الرسمي للعطاء مطلوب' } });
+        }
 
-const httpError = (status, message) => {
-  const err = new Error(message);
-  err.status = status;
-  err.expose = true;
-  return err;
-};
+        let customFields = [];
+        let aiExtraction;
+        try {
+            customFields = req.body.customFields ? JSON.parse(req.body.customFields) : [];
+            aiExtraction = req.body.aiExtraction ? JSON.parse(req.body.aiExtraction) : undefined;
+        } catch (parseError) {
+            return res.status(400).json({ errors: { customFields: 'بيانات الحقول المخصصة غير صالحة' } });
+        }
 
-const pickWritable = (body) => {
-  const update = {};
-  for (const field of WRITABLE_FIELDS) {
-    if (body[field] !== undefined) update[field] = body[field];
-  }
-  return update;
-};
+        if (!title || title.trim().length < 3) return res.status(400).json({ errors: { title: 'عنوان العطاء مطلوب ويجب ألا يقل عن 3 أحرف' } });
+        if (!description || description.trim().length < 10) return res.status(400).json({ errors: { description: 'وصف العطاء مطلوب ويجب أن يكون واضحاً' } });
+        if (!category) return res.status(400).json({ errors: { category: 'الفئة مطلوبة' } });
+        if (!deadline) return res.status(400).json({ errors: { deadline: 'الموعد النهائي مطلوب' } });
 
-/** POST /api/tenders — FR-6.1, FR-6.2 */
-const createTender = async (req, res, next) => {
-  try {
-    const tender = new Tender({
-      ...pickWritable(req.body),
-      // FR-5.4: the owner is the authenticated caller, never a body value.
-      createdBy: req.user._id,
-      // FR-6.2: always open on creation.
-      status: "open",
-    });
+        const safeCustomFields = Array.isArray(customFields) ? customFields.slice(0, 30).map((field) => ({
+            key: String(field.key || '').trim().slice(0, 80),
+            label: String(field.label || '').trim().slice(0, 160),
+            value: String(field.value ?? '').trim().slice(0, 2000),
+            type: ['text', 'number', 'date'].includes(field.type) ? field.type : 'text',
+            required: Boolean(field.required),
+            source: field.source === 'document' ? 'document' : 'manual',
+            isPriority: Boolean(field.isPriority)
+        })).filter((field) => field.key && field.label) : [];
 
-    await tender.save();
-    res.json({ tender });
-  } catch (err) {
-    next(err);
-  }
+        const tender = await Tender.create({
+            title: title.trim(),
+            description: description.trim(),
+            category,
+            budgetEstimate: budgetEstimate === '' || budgetEstimate === undefined ? undefined : Number(budgetEstimate),
+            deadline,
+            officialBookUrl,
+            officialBookName,
+            customFields: safeCustomFields,
+            priorityFields,
+            aiExtraction,
+            createdBy: req.user.id,
+            status: 'open'
+        });
+        res.status(201).json({ tender });
+    } catch (err) {
+        next(err);
+    }
 };
 
 /**
- * GET /api/tenders — FR-7.1, FR-7.2
- *
- * Every filter is added only when the caller supplied it. Assigning an
- * undefined value would put an `undefined` key into the query and silently
- * match nothing.
+ * Retrieves a list of tenders, optionally filtered by category, budget, or owner.
+ * By default, returns only 'open' tenders unless querying for a specific owner.
+ * Returns a JSON object containing the tenders array.
  */
-const listTenders = async (req, res, next) => {
-  try {
-    const { category, minBudget, maxBudget, status, mine } = req.query;
-    const filter = {};
+module.exports.listTenders = async (req, res, next) => {
+    try {
+        const { category, minBudget, maxBudget, ownerId } = req.query;
 
-    // "mine" backs the organization dashboard's own-tenders list, which needs
-    // closed and cancelled rows too. Everyone else sees open tenders (FR-7.1).
-    if (mine === "true") {
-      filter.createdBy = req.user._id;
-    } else {
-      filter.status = "open";
+        // Build filter conditionally
+        const filter = {};
+
+        if (ownerId) {
+            filter.createdBy = ownerId;
+        } else {
+            filter.status = 'open';
+        }
+
+        if (category) {
+            filter.category = category;
+        }
+
+        if (minBudget !== undefined || maxBudget !== undefined) {
+            filter.budgetEstimate = {};
+            if (minBudget !== undefined) filter.budgetEstimate.$gte = Number(minBudget);
+            if (maxBudget !== undefined) filter.budgetEstimate.$lte = Number(maxBudget);
+        }
+
+        const tenders = await Tender.find(filter).populate('createdBy', 'companyName').sort({ createdAt: -1 });
+        res.status(200).json({ tenders });
+    } catch (err) {
+        next(err);
     }
-
-    if (status && TENDER_STATUSES.includes(status)) filter.status = status;
-    if (category) filter.category = category;
-
-    const min = Number(minBudget);
-    const max = Number(maxBudget);
-    if (minBudget !== undefined && minBudget !== "" && Number.isFinite(min)) {
-      filter.budgetEstimate = { ...filter.budgetEstimate, $gte: min };
-    }
-    if (maxBudget !== undefined && maxBudget !== "" && Number.isFinite(max)) {
-      filter.budgetEstimate = { ...filter.budgetEstimate, $lte: max };
-    }
-
-    const tenders = await Tender.find(filter)
-      .populate("createdBy", "companyName")
-      .sort({ createdAt: -1 });
-
-    res.json({ tenders });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/** GET /api/tenders/:id — FR-7.3 */
-const getTenderById = async (req, res, next) => {
-  try {
-    const tender = await Tender.findById(req.params.id).populate(
-      "createdBy",
-      "companyName"
-    );
-
-    if (!tender) return next(httpError(404, "العطاء المطلوب غير موجود."));
-
-    res.json({ tender });
-  } catch (err) {
-    // A malformed id is a CastError, which the global middleware maps to 404.
-    next(err);
-  }
 };
 
 /**
- * GET /api/admin/tenders — admin oversight view of every tender, regardless
- * of status (open, closed, cancelled). GET /api/tenders only shows open
- * tenders publicly, or the caller's own via ?mine=true — neither gives an
- * admin visibility into the full platform history.
+ * Retrieves a single tender by its ID, populating the creator's company name.
+ * Returns the tender object or 404 if not found.
  */
-const listAllTendersForAdmin = async (req, res, next) => {
-  try {
-    const tenders = await Tender.find({})
-      .populate("createdBy", "companyName")
-      .sort({ createdAt: -1 });
-
-    res.json({ tenders });
-  } catch (err) {
-    next(err);
-  }
+module.exports.getTenderById = async (req, res, next) => {
+    try {
+        const tender = await Tender.findById(req.params.id).populate('createdBy', 'companyName');
+        if (!tender) {
+            return res.status(404).json({ error: "العطاء غير موجود" });
+        }
+        res.status(200).json({ tender });
+    } catch (err) {
+        next(err);
+    }
 };
 
 /**
- * PATCH /api/tenders/:id — FR-8.1
- *
- * isOwnerOrAdmin has already loaded the tender onto req.resource and refused
- * anyone who is not the owner. Editing is allowed only while the tender is
- * still open.
+ * Updates an open tender's fields.
+ * Prevents overriding ownership or status.
+ * Returns the updated tender object.
  */
-const updateTender = async (req, res, next) => {
-  try {
-    const tender = req.resource;
+module.exports.updateTender = async (req, res, next) => {
+    try {
+        const tender = await Tender.findById(req.params.id);
 
-    if (tender.status !== "open") {
-      return next(httpError(400, "لا يمكن تعديل عطاء مغلق أو ملغى."));
+        if (!tender) {
+            return res.status(404).json({ error: "العطاء غير موجود" });
+        }
+
+        if (tender.status !== 'open') {
+            return res.status(400).json({ error: "لا يمكن تعديل عطاء مغلق أو ملغى" });
+        }
+
+        // Prevent overriding ownership
+        delete req.body.createdBy;
+        delete req.body.status;
+
+        // Apply updates
+        Object.assign(tender, req.body);
+
+        // Validate and save
+        await tender.save(); // save() runs validators, including our custom deadline validator
+
+        res.status(200).json({ tender });
+    } catch (err) {
+        next(err);
     }
-
-    Object.assign(tender, pickWritable(req.body));
-
-    // save() runs the schema validators, including the future-date rule, so a
-    // deadline cannot be edited into the past.
-    await tender.save();
-
-    res.json({ tender });
-  } catch (err) {
-    next(err);
-  }
 };
 
 /**
- * DELETE /api/tenders/:id — FR-8.2, FR-8.3
- *
- * A soft close: the SRS has no hard-delete requirement, and §5.2 keeps
- * `closed` and `cancelled` as states. The owner or an admin may act; an admin
- * may do so on any tender, to moderate policy violations.
+ * Changes a tender's status to 'closed'.
+ * Skips full validation to allow closing expired tenders.
+ * Returns the updated tender object.
  */
-const closeTender = async (req, res, next) => {
-  try {
-    const tender = req.resource;
+module.exports.closeTender = async (req, res, next) => {
+    try {
+        const tender = await Tender.findById(req.params.id);
 
-    if (tender.status !== "open") {
-      return next(httpError(400, "العطاء مغلق أو ملغى مسبقاً."));
+        if (!tender) {
+            return res.status(404).json({ error: "العطاء غير موجود" });
+        }
+
+        tender.status = 'closed';
+        await tender.save({ validateModifiedOnly: true });
+
+        res.status(200).json({ tender });
+    } catch (err) {
+        next(err);
     }
-
-    const requested = req.body?.status;
-    tender.status = requested === "cancelled" ? "cancelled" : "closed";
-    await tender.save();
-
-    res.json({
-      message: tender.status === "cancelled" ? "تم إلغاء العطاء." : "تم إغلاق العطاء.",
-      tender,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-module.exports = {
-  createTender,
-  listTenders,
-  getTenderById,
-  updateTender,
-  closeTender,
-  listAllTendersForAdmin,
 };

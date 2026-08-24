@@ -1,74 +1,28 @@
-// One component, four label sets (design.md §5): organization approval,
-// tender status, proposal status, auction status. Status is never colour
-// alone — every stamp carries an Arabic label and an icon.
-const STATUS_MAP = {
-  organization: {
-    pending: { label: "قيد المراجعة", tone: "warning" },
-    approved: { label: "مقبول", tone: "success" },
-    rejected: { label: "مرفوض", tone: "error" },
-  },
-  tender: {
-    open: { label: "مفتوح", tone: "success" },
-    closed: { label: "مغلق", tone: "neutral" },
-    cancelled: { label: "ملغى", tone: "error" },
-  },
-  proposal: {
-    submitted: { label: "مُقدَّم", tone: "neutral" },
-    under_review: { label: "قيد المراجعة", tone: "warning" },
-    accepted: { label: "مقبول", tone: "success" },
-    rejected: { label: "مرفوض", tone: "error" },
-  },
-  auction: {
-    pending_approval: { label: "قيد الموافقة", tone: "warning" },
-    active: { label: "نشط", tone: "success" },
-    ended: { label: "منتهي", tone: "neutral" },
-    cancelled: { label: "ملغى", tone: "error" },
-  },
-};
+import React from 'react';
 
-const UNKNOWN = { label: "غير محدد", tone: "neutral" };
+export default function StatusStamp({ status }) {
+  const config = {
+    pending: { label: 'قيد المراجعة', classes: 'border-warning/30 bg-warning/10 text-warning' },
+    approved: { label: 'مقبول', classes: 'border-success/30 bg-success/10 text-success' },
+    rejected: { label: 'مرفوض', classes: 'border-error/30 bg-error/10 text-error' },
+    active: { label: 'نشط', classes: 'border-registry-green/30 bg-registry-green/10 text-registry-green' },
+    pending_approval: { label: 'بانتظار اعتماد المشرف', classes: 'border-warning/30 bg-warning/10 text-warning' },
+    ended: { label: 'منتهي', classes: 'border-text-secondary/30 bg-text-secondary/10 text-text-secondary' },
+    cancelled: { label: 'ملغى', classes: 'border-error/30 bg-error/10 text-error' },
+    winning: { label: 'متصدّر حالياً', classes: 'border-success/30 bg-success/10 text-success' },
+    outbid: { label: 'تمت المزايدة عليك', classes: 'border-warning/30 bg-warning/10 text-warning' },
+    won: { label: 'فائز', classes: 'border-success/30 bg-success/10 text-success' },
+    lost: { label: 'غير فائز', classes: 'border-text-secondary/30 bg-text-secondary/10 text-text-secondary' },
+    submitted: { label: 'مُقدَّم', classes: 'border-success/30 bg-success/10 text-success' },
+    accepted: { label: 'مقبول', classes: 'border-success/30 bg-success/10 text-success' },
+    open: { label: 'مفتوح', classes: 'border-registry-green/30 bg-registry-green/10 text-registry-green' }
+  };
 
-const TONE_CLASSES = {
-  success: "border-registry-green text-registry-green",
-  warning: "border-warning text-warning",
-  error: "border-error text-error",
-  neutral: "border-border text-text-secondary",
-};
-
-// Non-directional glyphs only — nothing here flips under RTL.
-const TONE_ICONS = {
-  success: "M20 6 9 17l-5-5",
-  warning: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  error: "M18 6 6 18M6 6l12 12",
-  neutral: "M5 12h14",
-};
-
-/**
- * @param {"organization"|"tender"|"proposal"|"auction"} entity
- * @param {string} status raw status value as stored on the document
- */
-const StatusStamp = ({ entity, status }) => {
-  const { label, tone } = STATUS_MAP[entity]?.[status] ?? UNKNOWN;
+  const current = config[status] || { label: status, classes: 'border-border bg-paper text-text-secondary' };
 
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-control border bg-surface px-2.5 py-1 text-xs font-medium ${TONE_CLASSES[tone]}`}
-    >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-3.5 w-3.5 shrink-0"
-      >
-        <path d={TONE_ICONS[tone]} />
-      </svg>
-      {label}
+    <span className={`inline-block px-2.5 py-1 text-xs font-medium border rounded-full ${current.classes}`}>
+      {current.label}
     </span>
   );
-};
-
-export default StatusStamp;
+}

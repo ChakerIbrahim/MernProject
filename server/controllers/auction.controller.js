@@ -1,357 +1,306 @@
-const Auction = require("../models/auction.model");
-const BidHistory = require("../models/bidHistory.model");
-const { resolveAuctionState } = require("../config/auctionState");
-const { discardUploadedFile } = require("../config/multer.config");
+const fs = require('fs');
+const mongoose = require('mongoose');
+const Auction = require('../models/auction.model');
+const BidHistory = require('../models/bidHistory.model');
+const { resolveAuctionState } = require('../functions/auction-state');
 
-const BID_TOO_LOW = "يجب أن تكون مزايدتك أعلى من السعر الحالي.";
-const RECENT_BIDS = 10;
+const allowedImageMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+const allowedDocumentMimeTypes = [...allowedImageMimeTypes, 'application/pdf'];
 
-// Only these may come from the caller. `status`, `currentPrice`,
-// `currentHighestBidder` and `createdBy` are all derived — accepting `status`
-// from the body would let a lister approve its own auction (FR-12.2).
-const WRITABLE_FIELDS = ["title", "description", "startingPrice", "endsAt"];
-
-const httpError = (status, message) => {
-  const err = new Error(message);
-  err.status = status;
-  err.expose = true;
-  return err;
-};
-
-/** FR-12.5 — how long is left, computed from endsAt, never cached at listing time. */
 const withTimeRemaining = (auction) => {
-  const json = auction.toJSON ? auction.toJSON() : auction;
-  return {
-    ...json,
-    timeRemainingMs: Math.max(0, new Date(json.endsAt).getTime() - Date.now()),
-  };
+    const item = auction.toObject ? auction.toObject() : auction;
+    return {
+        ...item,
+        timeRemainingMs: Math.max(0, new Date(item.endsAt).getTime() - Date.now())
+    };
 };
 
-const pickWritable = (body) => {
-  const values = {};
-  for (const field of WRITABLE_FIELDS) {
-    if (body[field] !== undefined) values[field] = body[field];
-  }
-  return values;
+const validateAuctionImage = async (file) => {
+    if (!file) return true;
+    const { fileTypeFromFile } = await import('file-type');
+    const detectedType = await fileTypeFromFile(file.path);
+    return Boolean(detectedType && allowedImageMimeTypes.includes(detectedType.mime));
 };
 
-/** POST /api/auctions — FR-12.1, FR-12.2 */
-const createAuction = async (req, res, next) => {
-  try {
-    const auction = new Auction({
-      ...pickWritable(req.body),
-      createdBy: req.user._id,
-      imageUrl: req.file ? `/uploads/${req.file.filename}` : undefined,
-      // FR-12.2 — always pending, whoever the lister is. An admin gets no
-      // self-approval shortcut.
-      status: "pending_approval",
-    });
+const populateAuction = (query) => query
+    .populate('createdBy', 'name companyName email')
+    .populate('currentHighestBidder', 'name email companyName');
 
+/**
+ * Creates a new auction with optional uploaded images and an official document.
+ * Expects form-data in req.body and req.files.
+ * Returns the created auction (status: 'pending_approval').
+ */
+module.exports.createAuction = async (req, res, next) => {
     try {
-      await auction.validate();
-    } catch (schemaError) {
-      discardUploadedFile(req.file);
-      const errors = {};
-      for (const field of Object.keys(schemaError.errors || {})) {
-        errors[field] = schemaError.errors[field].message;
-      }
-      const err = new Error("validation failed");
-      err.status = 400;
-      err.errors = errors;
-      return next(err);
-    }
+        const files = req.files || {};
+        const legacyImage = req.file ? [req.file] : [];
+        const imageFiles = [...legacyImage, ...(files.images || [])];
+        const documentFile = files.officialDocument?.[0] || null;
 
-    await auction.save();
-    res.json({ auction: withTimeRemaining(auction) });
-  } catch (err) {
-    discardUploadedFile(req.file);
-    next(err);
-  }
+        for (const image of imageFiles) {
+            const isValidImage = await validateAuctionImage(image);
+            if (!isValidImage) {
+                fs.unlinkSync(image.path);
+                return res.status(400).json({ errors: { images: "إحدى الصور غير مدعومة، يرجى رفع JPG أو PNG" } });
+            }
+        }
+
+        if (documentFile) {
+            const { fileTypeFromFile } = await import('file-type');
+            const detectedType = await fileTypeFromFile(documentFile.path);
+            if (!detectedType || !allowedDocumentMimeTypes.includes(detectedType.mime)) {
+                fs.unlinkSync(documentFile.path);
+                return res.status(400).json({ errors: { officialDocument: "الوثيقة غير مدعومة، يرجى رفع PDF أو JPG أو PNG" } });
+            }
+        }
+
+        let itemFields = [];
+        if (req.body.itemFields) {
+            try {
+                itemFields = JSON.parse(req.body.itemFields);
+            } catch (error) {
+                return res.status(400).json({ errors: { itemFields: "بيانات الحقول الإضافية غير صالحة" } });
+            }
+        }
+        if (!Array.isArray(itemFields) || itemFields.length > 30 || itemFields.some((field) => !field?.label || !String(field.label).trim())) {
+            return res.status(400).json({ errors: { itemFields: "تحقق من الحقول الإضافية المدخلة" } });
+        }
+        const missingItemField = itemFields.find((field) => field.required && !String(field.value || '').trim());
+        if (missingItemField) {
+            return res.status(400).json({ errors: { itemFields: `الحقل المطلوب غير مكتمل: ${missingItemField.label}` } });
+        }
+
+        const { title, description, startingPrice, endsAt } = req.body;
+        const requestedDocumentUrl = String(req.body.officialDocumentUrl || '');
+        const savedDocumentUrl = requestedDocumentUrl.startsWith('/uploads/')
+            ? requestedDocumentUrl
+            : (documentFile ? `/uploads/${documentFile.filename}` : '');
+        const imageUrls = imageFiles.map((file) => `/uploads/${file.filename}`);
+        const auction = new Auction({
+            title,
+            description,
+            startingPrice,
+            endsAt,
+            imageUrl: imageUrls[0] || '',
+            images: imageUrls,
+            officialDocumentUrl: savedDocumentUrl,
+            officialDocumentName: req.body.officialDocumentName || documentFile?.originalname || '',
+            itemFields: itemFields.map((field) => ({
+                key: String(field.key || field.label).trim().slice(0, 80),
+                label: String(field.label).trim().slice(0, 120),
+                value: String(field.value || '').trim().slice(0, 1000),
+                type: ['text', 'number', 'date'].includes(field.type) ? field.type : 'text',
+                required: Boolean(field.required),
+                source: field.source === 'document' ? 'document' : 'manual'
+            })),
+            createdBy: req.user.id,
+            status: 'pending_approval'
+        });
+
+        await auction.save();
+        const populatedAuction = await populateAuction(Auction.findById(auction._id));
+        res.status(201).json({ auction: withTimeRemaining(populatedAuction) });
+    } catch (err) {
+        next(err);
+    }
 };
 
 /**
- * GET /api/auctions — FR-12.4, public, no token required.
- *
- * The filter is applied here, in the database query, not on the client: a
- * pending_approval auction must never reach the response body at all, since
- * anyone can read this endpoint (FR-12.2).
+ * Retrieves all active auctions that have not yet expired.
+ * Resolves lazy state updates before returning the list.
+ * Returns a JSON object containing the auctions array.
  */
-const listActiveAuctions = async (req, res, next) => {
-  try {
-    // ?mine=true backs the organization dashboard's own-listings view. It moved
-    // here in Sprint 07 because /api/users/me/auctions had to take on its
-    // SRS §4.2 meaning — the individual's bidding history (FR-14.4). Same
-    // pattern as GET /api/tenders?mine=true from Sprint 03.
-    if (req.query.mine === "true") {
-      if (!req.user) {
-        const err = new Error("unauthenticated");
-        err.status = 401;
-        return next(err);
-      }
-
-      const owned = await Auction.find({ createdBy: req.user._id })
-        .populate("createdBy", "companyName name")
-        .sort({ createdAt: -1 });
-
-      for (const auction of owned) await resolveAuctionState(auction);
-      return res.json({ auctions: owned.map(withTimeRemaining) });
+module.exports.listActiveAuctions = async (req, res, next) => {
+    try {
+        const candidates = await populateAuction(Auction.find({ status: 'active' }).sort({ endsAt: 1 }));
+        const resolved = await Promise.all(candidates.map(resolveAuctionState));
+        const now = new Date();
+        const auctions = resolved.filter((auction) => auction.status === 'active' && auction.endsAt > now);
+        res.status(200).json({ auctions: auctions.map(withTimeRemaining) });
+    } catch (err) {
+        next(err);
     }
-
-    // FR-14.1 — anything already past its deadline is resolved on this read,
-    // then excluded, so the public list never shows a finished auction.
-    const candidates = await Auction.find({ status: "active" })
-      .populate("createdBy", "companyName name")
-      .sort({ endsAt: 1 });
-
-    const live = [];
-    for (const auction of candidates) {
-      await resolveAuctionState(auction);
-      if (auction.status === "active") live.push(auction);
-    }
-
-    res.json({ auctions: live.map(withTimeRemaining) });
-  } catch (err) {
-    next(err);
-  }
 };
 
 /**
- * GET /api/auctions/:id — public.
- *
- * A pending auction is a 404 to the world; its creator and an admin may see it.
- * 404 rather than 403, so the endpoint does not confirm that a hidden listing
- * exists.
+ * Retrieves a single auction by ID, resolving its state (e.g., closing it if expired).
+ * Includes the 10 most recent bids in the response.
+ * Returns 404 if not found or if it is pending and the user is not the owner/admin.
  */
-const getAuctionById = async (req, res, next) => {
-  try {
-    const auction = await Auction.findById(req.params.id).populate(
-      "createdBy",
-      "companyName name"
-    );
+module.exports.getAuctionById = async (req, res, next) => {
+    try {
+        const auction = await populateAuction(Auction.findById(req.params.id));
+        if (!auction) return res.status(404).json({ error: "المزاد غير موجود" });
 
-    if (!auction) return next(httpError(404, "المزاد المطلوب غير موجود."));
+        await resolveAuctionState(auction);
 
-    if (auction.status === "pending_approval") {
-      const caller = req.user;
-      const isCreator = caller && String(auction.createdBy?._id) === String(caller._id);
-      const isAdmin = caller?.role === "admin";
-      if (!isCreator && !isAdmin) {
-        return next(httpError(404, "المزاد المطلوب غير موجود."));
-      }
+        const canSeePending = req.user && (
+            req.user.role === 'admin' ||
+            auction.createdBy._id.toString() === req.user.id
+        );
+        if (auction.status === 'pending_approval' && !canSeePending) {
+            return res.status(404).json({ error: "المزاد غير موجود" });
+        }
+
+        const bidHistory = await BidHistory.find({ auction: auction._id })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .populate('bidder', 'name companyName')
+            .select('bidder amount createdAt')
+            .lean();
+
+        res.status(200).json({ auction: { ...withTimeRemaining(auction), bidHistory } });
+    } catch (err) {
+        next(err);
     }
-
-    // FR-14.1 — a finished auction reads as ended from here on.
-    await resolveAuctionState(auction);
-
-    // Polled every 4s per viewer, so keep it lean: the most recent handful of
-    // bids and only the fields the UI renders.
-    const bids = await BidHistory.find({ auction: auction._id })
-      .populate("bidder", "name")
-      .sort({ createdAt: -1 })
-      .limit(RECENT_BIDS)
-      .select("amount createdAt bidder");
-
-    res.json({ auction: withTimeRemaining(auction), bids });
-  } catch (err) {
-    next(err);
-  }
 };
 
 /**
- * POST /api/auctions/:id/bid — FR-13
- *
- * The check is a single conditional update, not read-then-write: two people
- * bidding the same amount at the same instant would both pass a naive
- * comparison, and only the database can arbitrate that. A null result means
- * someone got there first, or the auction is no longer open.
+ * Places a bid on an active auction.
+ * Expects the bid amount in req.body.amount.
+ * Returns 400 if the bid is not higher than the current price or the auction is closed.
  */
-const placeBid = async (req, res, next) => {
-  try {
-    const amount = Number(req.body.amount);
+module.exports.placeBid = async (req, res, next) => {
+    try {
+        const amount = Number(req.body?.amount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return res.status(400).json({ errors: { amount: "أدخل قيمة مزايدة صحيحة" } });
+        }
 
-    const auction = await Auction.findById(req.params.id);
-    if (!auction) return next(httpError(404, "المزاد المطلوب غير موجود."));
+        const existingAuction = await Auction.findById(req.params.id);
+        if (!existingAuction) return res.status(404).json({ error: "المزاد غير موجود" });
 
-    await resolveAuctionState(auction);
+        if (existingAuction.createdBy.toString() === req.user.id) {
+            return res.status(403).json({ error: "لا يمكنك المزايدة على مزادك الخاص" });
+        }
 
-    if (auction.status !== "active") {
-      return next(httpError(400, "هذا المزاد غير متاح للمزايدة."));
+        await resolveAuctionState(existingAuction);
+        if (existingAuction.status !== 'active' || existingAuction.endsAt <= new Date()) {
+            return res.status(400).json({ error: "المزاد غير نشط أو انتهى" });
+        }
+
+        const updated = await Auction.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                status: 'active',
+                endsAt: { $gt: new Date() },
+                currentPrice: { $lt: amount }
+            },
+            {
+                $set: {
+                    currentPrice: amount,
+                    currentHighestBidder: req.user.id
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updated) {
+            return res.status(400).json({ errors: { amount: "يجب أن تكون المزايدة أعلى من السعر الحالي" } });
+        }
+
+        await BidHistory.create({
+            auction: updated._id,
+            bidder: req.user.id,
+            amount
+        });
+
+        const populatedAuction = await populateAuction(Auction.findById(updated._id));
+        res.status(200).json({ auction: withTimeRemaining(populatedAuction) });
+    } catch (err) {
+        next(err);
     }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      const err = new Error("validation failed");
-      err.status = 400;
-      err.errors = { amount: "يرجى إدخال قيمة مزايدة صحيحة." };
-      return next(err);
-    }
-
-    // FR-13.2 — strictly greater. $lt on currentPrice is what enforces it.
-    const updated = await Auction.findOneAndUpdate(
-      {
-        _id: auction._id,
-        status: "active",
-        endsAt: { $gt: new Date() },
-        currentPrice: { $lt: amount },
-      },
-      { $set: { currentPrice: amount, currentHighestBidder: req.user._id } },
-      { new: true }
-    ).populate("createdBy", "companyName name");
-
-    if (!updated) return next(httpError(400, BID_TOO_LOW));
-
-    // FR-13.3 — written only after the update succeeded, or history fills with
-    // bids that never took effect.
-    await BidHistory.create({
-      auction: auction._id,
-      bidder: req.user._id,
-      amount,
-    });
-
-    res.json({ auction: withTimeRemaining(updated) });
-  } catch (err) {
-    next(err);
-  }
 };
 
 /**
- * GET /api/users/me/auctions — FR-14.4
- *
- * The auctions this individual has bid on, each with their own highest bid and
- * an outcome. This is the SRS §4.2 meaning of the path; Sprint 06 used it for
- * an organization's own listings, which moved to GET /api/auctions?mine=true.
+ * Retrieves all auctions created by the currently authenticated user.
+ * Returns a JSON object containing the auctions array.
  */
-const listMyBidAuctions = async (req, res, next) => {
-  try {
-    const grouped = await BidHistory.aggregate([
-      { $match: { bidder: req.user._id } },
-      {
-        $group: {
-          _id: "$auction",
-          myHighestBid: { $max: "$amount" },
-          lastBidAt: { $max: "$createdAt" },
-        },
-      },
-      { $sort: { lastBidAt: -1 } },
-    ]);
-
-    const auctions = [];
-    for (const entry of grouped) {
-      const auction = await Auction.findById(entry._id).populate(
-        "createdBy",
-        "companyName name"
-      );
-      if (!auction) continue;
-
-      // FR-14.1 again — the outcome must reflect a deadline that has passed,
-      // even though nothing scheduled ran.
-      await resolveAuctionState(auction);
-
-      const isHighest =
-        String(auction.currentHighestBidder || "") === String(req.user._id);
-      const isFinished = auction.status === "ended";
-
-      const outcome = isFinished
-        ? isHighest
-          ? "won"
-          : "lost"
-        : isHighest
-          ? "winning"
-          : "outbid";
-
-      auctions.push({
-        ...withTimeRemaining(auction),
-        myHighestBid: entry.myHighestBid,
-        lastBidAt: entry.lastBidAt,
-        outcome,
-      });
+module.exports.listCreatedAuctions = async (req, res, next) => {
+    try {
+        const auctions = await populateAuction(Auction.find({ createdBy: req.user.id }).sort({ createdAt: -1 }));
+        res.status(200).json({ auctions: auctions.map(withTimeRemaining) });
+    } catch (err) {
+        next(err);
     }
-
-    res.json({ auctions });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/** GET /api/admin/auctions/pending — admin review queue. */
-const listPendingAuctions = async (req, res, next) => {
-  try {
-    const auctions = await Auction.find({ status: "pending_approval" })
-      .populate("createdBy", "companyName name")
-      .sort({ createdAt: 1 });
-
-    res.json({ auctions: auctions.map(withTimeRemaining) });
-  } catch (err) {
-    next(err);
-  }
 };
 
 /**
- * GET /api/admin/auctions — admin oversight view of every auction,
- * regardless of status (active, ended, cancelled, pending_approval).
- * listPendingAuctions covers only the review queue; this covers the
- * full history for moderation purposes.
+ * Retrieves all auctions the currently authenticated user has bid on.
+ * Aggregates bid history to determine the user's highest bid and current outcome (winning/won/lost).
+ * Returns a JSON object containing the augmented auctions array.
  */
-const listAllAuctions = async (req, res, next) => {
-  try {
-    const auctions = await Auction.find({})
-      .populate("createdBy", "companyName name")
-      .sort({ createdAt: -1 });
+module.exports.listMyAuctions = async (req, res, next) => {
+    try {
+        const bidderId = new mongoose.Types.ObjectId(req.user.id);
+        const summaries = await BidHistory.aggregate([
+            { $match: { bidder: bidderId } },
+            {
+                $group: {
+                    _id: '$auction',
+                    highestBid: { $max: '$amount' },
+                    lastBidAt: { $max: '$createdAt' }
+                }
+            }
+        ]);
 
-    res.json({ auctions: auctions.map(withTimeRemaining) });
-  } catch (err) {
-    next(err);
-  }
-};
+        const auctions = await Promise.all(summaries.map(async (summary) => {
+            const auction = await populateAuction(Auction.findById(summary._id));
+            if (!auction) return null;
+            await resolveAuctionState(auction);
 
-/** PATCH /api/admin/auctions/:id/approve — FR-12.3 */
-const approveAuction = async (req, res, next) => {
-  try {
-    const auction = await Auction.findById(req.params.id);
-    if (!auction) return next(httpError(404, "المزاد المطلوب غير موجود."));
+            const isWinner = auction.currentHighestBidder && auction.currentHighestBidder._id.toString() === req.user.id;
+            let outcome = 'outbid';
+            if (auction.status === 'ended') outcome = isWinner ? 'won' : 'lost';
+            else if (auction.status === 'cancelled') outcome = 'lost';
+            else if (isWinner) outcome = 'winning';
 
-    if (auction.status !== "pending_approval") {
-      return next(httpError(400, "تمت معالجة هذا المزاد مسبقاً."));
+            return {
+                ...withTimeRemaining(auction),
+                highestBid: summary.highestBid,
+                lastBidAt: summary.lastBidAt,
+                outcome
+            };
+        }));
+
+        res.status(200).json({ auctions: auctions.filter(Boolean) });
+    } catch (err) {
+        next(err);
     }
-
-    auction.status = "active";
-    await auction.save();
-
-    res.json({ auction: withTimeRemaining(auction) });
-  } catch (err) {
-    next(err);
-  }
 };
 
-/** PATCH /api/admin/auctions/:id/reject */
-const rejectAuction = async (req, res, next) => {
-  try {
-    const auction = await Auction.findById(req.params.id);
-    if (!auction) return next(httpError(404, "المزاد المطلوب غير موجود."));
-
-    if (auction.status !== "pending_approval") {
-      return next(httpError(400, "تمت معالجة هذا المزاد مسبقاً."));
+/**
+ * Retrieves all auctions awaiting admin approval.
+ * Restricted to admins via routes. Returns a JSON object containing the auctions array.
+ */
+module.exports.listPendingAuctions = async (req, res, next) => {
+    try {
+        const auctions = await populateAuction(Auction.find({ status: 'pending_approval' }).sort({ createdAt: 1 }));
+        res.status(200).json({ auctions: auctions.map(withTimeRemaining) });
+    } catch (err) {
+        next(err);
     }
-
-    const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
-
-    auction.status = "cancelled";
-    auction.rejectionReason = reason || undefined;
-    await auction.save();
-
-    res.json({ auction: withTimeRemaining(auction) });
-  } catch (err) {
-    next(err);
-  }
 };
 
-module.exports = {
-  createAuction,
-  listActiveAuctions,
-  getAuctionById,
-  placeBid,
-  listMyBidAuctions,
-  listPendingAuctions,
-  approveAuction,
-  rejectAuction,
-  listAllAuctions,
+/**
+ * Approves a pending auction, making it active and publicly visible.
+ * Restricted to admins via routes.
+ * Returns the updated auction object.
+ */
+module.exports.approveAuction = async (req, res, next) => {
+    try {
+        const auction = await Auction.findById(req.params.id);
+        if (!auction) return res.status(404).json({ error: "المزاد غير موجود" });
+        if (auction.status !== 'pending_approval') {
+            return res.status(400).json({ error: "لا يمكن اعتماد هذا المزاد لأنه ليس قيد المراجعة" });
+        }
+
+        auction.status = 'active';
+        await auction.save();
+        const populatedAuction = await populateAuction(Auction.findById(auction._id));
+        res.status(200).json({ auction: withTimeRemaining(populatedAuction) });
+    } catch (err) {
+        next(err);
+    }
 };

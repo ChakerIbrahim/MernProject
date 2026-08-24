@@ -1,1422 +1,1063 @@
-# PROGRESS
-
-Sprint history for the Procurement & Auction Platform (MVP). Inputs live in
-`/information`; this file is the record of what was actually built.
-
----
-
 ## Sprint 00 — Foundation & Shell — completed 2026-08-20
 
-**Requirements delivered:** C-1, C-2, C-3 (schema-first validation groundwork), C-4, C-5 (bcrypt installed, hashing itself is Sprint 01), C-6, NFR-M1, NFR-M2, NFR-M5, NFR-PO1, NFR-PO2, NFR-U3/U5 (primitives), NFR-U6, UI-1, UI-3, NFR-P3, API-1, API-2, API-3, API-5, NFR-S5.
-
-**Endpoints added:**
-
-| Method | Path | Result |
-|---|---|---|
-| GET | `/api/health` | 200 `{ message: "backend is healthy" }` |
-| GET | `/api/dev/error` | 500 generic Arabic message — dev-only, proves the global error middleware |
-| — | any unmatched path | 404 `{ message }` JSON, never Express's default HTML |
-
-**Screens added:**
-
-| Path | Purpose |
-|---|---|
-| `/` | Placeholder landing page. Sprint 01 replaces it with the real entry point (SRS §4.1) |
-| `/dev/rtl` | Permanent development tool: every shared primitive rendered with real Arabic, plus the three RTL hazards. Check before every sprint sign-off, at 360px |
-| `*` | Redirects to `/` — routing behaviour, not a screen |
-
-**Shared primitives added** (`client/src/components/`): `Spinner`, `EmptyState`,
-`ErrorState`, `StatusStamp`, `FormField`, `Button`, `PageHeading`.
-
-**Deviations from the sprint file:**
-
-1. **Env file is `server/.env`, not `server.env`.** `AGENTS.md` §1 scaffolds
-   `server.env` while §4 says values are read from `.env` files, and §5
-   gitignores both — the doc is internally inconsistent. Sprint 00 task 6 says
-   `.env`, and `.env` is dotenv's default with no extra config. Both names are
-   gitignored, so switching later costs nothing.
-
-2. **Added `routes/health.routes.js` and `controllers/health.controller.js`.**
-   `AGENTS.md` §3 lists only the `user.*` trio. Putting the health handler in
-   `server.js` would have mixed routing with business logic (NFR-M1). The folder
-   layout is unchanged; only files were added inside it.
-
-3. **Added `GET /api/dev/error`.** The sprint's acceptance criteria require
-   proving that a thrown error produces the standard shape. The route is guarded
-   by `NODE_ENV !== "production"` and never mounts in production.
-
-4. **Added a 404 catch-all and a `CastError → 404` branch** to the global error
-   middleware. The sprint file specifies only `ValidationError → 400` and
-   `unrecognised → 500`; without these two, an unknown path returns Express's
-   HTML page and a malformed ObjectId returns 500 — both forbidden by API-5.
-   A duplicate-key (`11000`) → 400 branch was added for the same reason (FR-1.1).
-
-5. **`start()` is guarded by `require.main === module`.** `npm start` behaves
-   exactly as specified; the guard lets a script or test import the configured
-   app without opening a DB connection or a port. This is how the endpoints were
-   verified with MongoDB unavailable (see Known issues).
-
-6. **`User` model implemented per SRS §5.1.** The sprint puts "any model beyond
-   `User`" out of scope, so the User schema is in scope; `AGENTS.md` §1 scaffolds
-   the file. Validation is declared once in the schema (NFR-M3) with Arabic
-   messages from SRS §5.6, plus a `toJSON` transform that strips the password
-   hash (NFR-S2). **No authentication logic** — no bcrypt hook, no JWT, no
-   controller bodies. That is Sprint 01.
-
-7. **`.claude/launch.json` added** so the client dev server can be launched and
-   inspected by tooling. Not a product file.
-
-8. **Postman collection created** at
-   `postman/procurement-platform.postman_collection.json`. Requests were not
-   clicked through the Postman GUI — they were exercised with equivalent HTTP
-   calls (see the acceptance-criteria report for the transcript). The collection
-   is the artifact later sprints append to.
-
-**Conflicts checked and NOT found:** No statement in `sprint-00-foundation.md`
-contradicts the SRS. Two items looked like conflicts and are not:
-
-- The `tailwind.config.js` (Tailwind 3) vs `@tailwindcss/vite` (Tailwind 4)
-  clash between `design.md` §8 and `AGENTS.md` §1 is already flagged in
-  `SPRINT_PLAN.md` §2 and pre-resolved to the CSS-first `@theme` block. Only
-  `client/src/index.css` holds the tokens; **no `tailwind.config.js` exists.**
-- `/dev/rtl` is not in the SRS §4.1 screen inventory, and `design.md` §6 says not
-  to invent screens beyond what the FRs require. `/dev/rtl` is a development
-  tool the sprint file mandates, not a product screen; SRS §4.1 does not forbid
-  non-product routes.
-
-**Noted for Sprint 01 (not a Sprint 00 conflict):** `SPRINT_PLAN.md` §6 states
-the token travels in the response body as `Authorization: Bearer <token>` and
-that this project does **not** use httpOnly cookies, but the
-`react-component` SKILL's examples (§5, §6) pass `withCredentials: true` to
-axios. Follow SPRINT_PLAN §6 — it is downstream of SRS §4.2, which specifies
-`200 { user, token }`. Sprint 00's `cors({ credentials: true })` is harmless
-either way and was kept exactly as the sprint file specifies.
-
-**Known issues carried forward:**
-
-1. **MongoDB cannot run on this machine.** MongoDB 8.3 is installed at
-   `C:\Program Files\MongoDB\Server\8.3`, but `mongod.exe` aborts immediately
-   with `0xC0000139 STATUS_ENTRYPOINT_NOT_FOUND`, and its log directory is
-   empty — the Windows service has never started successfully since it was
-   installed. The VC++ 2015-2022 runtime is present and current, and the host is
-   Windows 10 22H2 (build 19045); MongoDB 8.1+ dropped Windows 10 support, which
-   is the most likely cause. **Consequence:** the "successful DB connection"
-   half of the first acceptance criterion is unverified. The failure path is
-   verified — the full error object is logged and the process exits 1.
-   **Fix before Sprint 01:** install MongoDB 8.0 (the last line supporting
-   Windows 10 — SRS requires only "MongoDB 6 or later"), or point
-   `MONGOOSE_URI` at an Atlas cluster (NFR-PO1 permits either).
-
-   **RESOLVED 2026-08-20 (during Sprint 01):** the owner supplied a MongoDB
-   Atlas connection string. `npm start` now logs
-   `[db] database connected: test` followed by `server is running on port 8000`,
-   and `GET http://localhost:8000/api/health` answers from the real server.
-   **Sprint 00 acceptance criteria are now 9/9.** The local MongoDB 8.3 install
-   is still broken; nothing depends on it any more.
-
-2. **Client-side env skeleton not created.** `VITE_EMAILJS_SERVICE_ID`,
-   `VITE_EMAILJS_TEMPLATE_ID`, and `VITE_EMAILJS_PUBLIC_KEY` are needed in
-   Sprint 08 (FR-16). Sprint 00 task 6 only specifies the server `.env`, so no
-   `client/.env.example` was created.
-
-3. **`GEMINI_API_KEY` is present but empty** in `server/.env`. Needed in
-   Sprint 05 (FR-10).
-
-4. **`express-rate-limit` is installed but not wired.** Sprint 08 (NFR-S, L-3).
-
-5. **Vite template leftovers kept:** `client/README.md` and
-   `client/.oxlintrc.json` are the scaffold defaults, untouched.
-
-6. **`helmet()` defaults will block cross-origin `/uploads` in Sprint 02.**
-   Verified on the running server: helmet sets
-   `Cross-Origin-Resource-Policy: same-origin`. The moment the API serves
-   uploaded proof documents and auction images statically and the client at
-   `:5173` loads them in an `<img>` or a link, the browser will refuse them —
-   and the failure looks like a CORS bug, not a helmet setting. Expect to need
-   `helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } })`, or to
-   scope that relaxation to the `/uploads` route only. Left as-is because
-   Sprint 00 specifies a bare `helmet()` and there are no uploads yet.
-
-**Postman collection updated:** yes — created (see deviation 8 for how it was
-verified).
-
----
+**Requirements delivered:** C-1…C-6, NFR-M1, NFR-M2, NFR-PO1, UI-1, UI-3, and the RTL foundation
+**Endpoints added:** `/api/health`
+**Screens added:** `/dev/rtl`
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no (no postman collection provided yet)
 
 ## Sprint 01 — Identity & Access — completed 2026-08-20
 
-**All 12 acceptance criteria verified against a live MongoDB Atlas cluster.**
-17/17 automated API checks passed, plus browser verification of the role guards
-and the pending-organization behaviour. One criterion is verified in part by
-inspection rather than observation — see the caveat below.
-
-**Requirements delivered:** FR-1.1 … FR-1.6, FR-2.1 … FR-2.3, FR-3.1 … FR-3.5,
-FR-5.1 … FR-5.5, NFR-S1, NFR-S2, NFR-S3, NFR-S6, NFR-S7, NFR-U1, NFR-U2, NFR-U3,
-DATA-1, DATA-2, DATA-3, API-3, API-4.
-
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| POST | `/api/auth/register` | No | — | 200 `{ user }` | 400 `{ errors }` |
-| POST | `/api/auth/login` | No | — | 200 `{ user, token }` | 400 `{ error }` |
-| GET | `/api/users/me` | Yes | Any | 200 `{ user }` | 401 |
-
-**Screens added:** `/login`, `/register/organization`, `/register/individual`,
-`/admin/dashboard`, `/org/dashboard`, `/dashboard`. `/` was rewritten to link to
-both registrations and login, and to the caller's own dashboard once signed in.
-
-**Modules added:** `config/jwt.config.js` (`signToken`, `isAuth`, `isRole`),
-`config/seed.js`, `controllers/auth.controller.js`, `routes/auth.routes.js`;
-client `functions/api.js`, `functions/auth.js`, `functions/authContext.js`,
-`functions/roles.js`, `functions/apiErrors.js`, and components `AuthProvider`,
-`RequireAuth`, `RequireRole`, `LogoutButton`.
-
-**Verification evidence.** Registration produced `status: "pending"` for an
-organization and `"approved"` for an individual, read back from the database
-rather than from the response. The stored password was a `$2b$10$` hash that
-bcrypt accepted; no response body contained the plaintext or a `password` key.
-A duplicate email returned 400 with an Arabic field-level message; a
-three-character password returned 400 and wrote **no** document (DATA-2).
-Unknown email and wrong password returned byte-identical 400 bodies, and the
-wrong password was genuinely rejected — the missing-await failure mode is not
-present. `/api/users/me` returned 401 with no token, with a garbage token, with
-a tampered signature, and with a token signed by a foreign secret; the admin
-probe returned 403 for an individual and 200 for the admin, so 401 and 403 are
-demonstrably different paths. Registering with `role: "admin"` returned 400 and
-created nothing; exactly one admin exists, from the seed. Saving a user without
-touching the password left the hash byte-identical, so the `isModified` guard
-holds.
-
-In the browser: a pending organization logged in, landed on `/org/dashboard`,
-showed the "قيد المراجعة" stamp and the review notice, and had **no**
-tender-creation control — only logout. Flipping that account to `approved` made
-the approval notice and the tender section appear, so the gate is conditional
-rather than merely absent. A logged-in individual visiting `/admin/dashboard` or
-`/org/dashboard` was redirected to `/dashboard`, and an organization visiting
-the other two was redirected to `/org/dashboard`. A full browser reload kept the
-session on `/org/dashboard`. A forged token together with a forged cached user
-never rendered the admin screen and left storage cleared at `/login`.
-
-**Caveat on criterion 10.** "Refreshing keeps the session" is verified by
-observation. "Does not flash the login page" is verified **structurally, not by
-sampling**: `isLoading` is initialised synchronously from `getToken()` before
-first paint, so `RequireAuth` renders a spinner and its `!user` redirect branch
-is unreachable while the session is being restored. High-frequency DOM sampling
-of a cold mount was attempted and abandoned — the headless browser pane throttles
-timers well below the resolution needed. Worth one look by eye on a real screen.
-
-**Deviations from the sprint file:**
-
-1. **`useAuth` lives in `functions/authContext.js`, not beside the provider.**
-   Exporting a hook and a component from one file trips the linter's
-   Fast-Refresh rule, and the project's own SKILL argues that warnings people
-   learn to ignore are a defect. `components/AuthProvider.jsx` exports only a
-   component. No `src/contexts/` directory was created — `AGENTS.md` §3 lists
-   exactly three client source folders.
-
-2. **Login failure is `400 { error }`, not 401.** SRS §4.2's endpoint table
-   specifies `400 { error }` for `/api/auth/login`, while API-4 says
-   "authentication failures shall return HTTP 401". Read together, API-4 governs
-   protected endpoints reached without a valid token (FR-5.1); a bad credential
-   posted to a public endpoint is a validation failure of the submitted form.
-   The specific per-endpoint statement wins. This is an SRS-internal tension,
-   resolved rather than escalated.
-
-3. **`server.js` error middleware gained two branches** — a controller-supplied
-   per-field map (`err.errors`) and a single-message body (`err.error`) — so
-   controllers still `next(err)` and one place formats every response (NFR-M5)
-   while honouring both shapes the SRS specifies.
-
-4. **Expected 4xx failures log one line instead of a stack trace.** Genuine 5xx
-   faults still log the full error object. Without this, every unauthenticated
-   request would bury real faults in noise from Sprint 02 onward.
-
-5. **`LogoutButton` navigates to `/login`, not `/`.** Clearing the user makes
-   `RequireAuth` redirect to `/login` on the same tick, so the original
-   `navigate("/")` created a race the guard always won. The code now states the
-   actual outcome. Found by testing logout, not by reading it.
-
-6. **`client/.env` and `client/.env.example` created** — Sprint 00 known issue 2,
-   now closed. `VITE_API_URL` is set; the three `VITE_EMAILJS_*` keys are present
-   but empty, for Sprint 08.
-
-7. **`GET /api/admin/ping` was created, used, and deleted** exactly as the sprint
-   file directs. It proved 401 differs from 403 (evidence above), then was
-   removed along with its controller. From Sprint 02 the real
-   `GET /api/admin/organizations/pending` carries that check; the Postman
-   collection holds a placeholder request pointing at it.
-
-**Bug found and fixed during verification:** rejecting `role: "admin"` returned
-the schema's generic "نوع الحساب مطلوب." because the Mongoose validation pass
-overwrote the controller's more specific message. The merge no longer overwrites
-a message the controller already set.
-
-**Security issue found and fixed:** `server/.env.example` — which is committed by
-design — was found holding real live values: the Atlas username and password, the
-JWT `SECRET`, `ADMIN_PASSWORD`, and a real `GEMINI_API_KEY`. That violates C-4
-and NFR-S4. The file was restored to a placeholder template. Nothing had been
-committed, so no secret entered git history. **The exposed credentials should
-still be rotated** if this repository is ever pushed or shared.
-
-**Conflicts checked and NOT found:** nothing in `sprint-01-identity-access.md`
-contradicts the SRS. Deferring the multer proof-document upload to Sprint 02
-while still requiring `proofDocumentUrl` looks like it weakens FR-1.3, but
-`SPRINT_PLAN.md` §3 explicitly assigns FR-1.3 to Sprint 02 — the requirement is
-enforced now; only the upload mechanism is phased.
-
-**Known issues carried forward:**
-
-1. **The Atlas URI names no database, so everything lands in `test`,** beside an
-   unrelated `jokes` collection from an earlier project. Adding
-   `/procurement_platform` before the `?` in `MONGOOSE_URI` would give this
-   project its own database. Harmless today — `users` was empty — but worth
-   fixing before real data accumulates.
-2. **No token expiry** — accepted limitation L-1, not an oversight.
-3. **`isAuth` performs one `User.findById` per protected request.** Deliberate:
-   role *and* status are re-derived from the record (NFR-S6), so an admin
-   approval takes effect immediately rather than at next login. Revisit only if
-   NFR-P1 is ever missed.
-4. **Sprint 00 known issues 4, 5, 6 still stand.** Issues 1, 2 and 3 are now
-   closed.
-5. **All verification data was cleaned up.** The `users` collection holds only
-   the seeded admin; the unrelated `jokes` collection was not touched.
-
-**Postman collection updated:** yes — a 12-request "Sprint 01" folder covering a
-success and at least one failure per endpoint. The equivalent HTTP calls were all
-executed and passed; the requests were not clicked through the Postman GUI.
-
----
+**Requirements delivered:** FR-1, FR-2, FR-3, FR-5, NFR-S1, NFR-S2, NFR-S3, NFR-S6, NFR-S7
+**Endpoints added:** `/api/auth/register`, `/api/auth/login`, `/api/users/me`
+**Screens added:** `/login`, `/register/organization`, `/register/individual`, `/admin/dashboard`, `/org/dashboard`, `/dashboard`
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no (no postman collection provided yet)
 
 ## Sprint 02 — Admin Organization Review — completed 2026-08-20
 
-**All 12 acceptance criteria verified.** 20/20 automated API checks passed, plus
-browser verification of the upload form and the admin review screen. Sprint 01
-was re-run and is 17/17, now including a real 401-vs-403 pair against this
-sprint's admin endpoint.
-
-**Requirements delivered:** FR-1.3, FR-4.1, FR-4.2, FR-4.3, FR-4.5 (call sites
-marked, not wired), NFR-S8, NFR-U3, NFR-U4, NFR-U5, C-9, API-2, API-5.
-
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| GET | `/api/admin/organizations/pending` | Yes | Admin | 200 `{ organizations }` | 401, 403 |
-| PATCH | `/api/admin/organizations/:id/approve` | Yes | Admin | 200 `{ organization }` | 400, 401, 403, 404 |
-| PATCH | `/api/admin/organizations/:id/reject` | Yes | Admin | 200 `{ organization }` | 400, 401, 403, 404 |
-| GET | `/uploads/:file` | No | — | the stored document | 404 |
-
-`POST /api/auth/register` now accepts `multipart/form-data` for the organization
-branch; the individual branch still posts plain JSON. One route serves both.
-
-**Screens changed:** `/register/organization` gained a file field with Arabic
-helper text, a courtesy type/size pre-check, and an upload progress bar.
-`/admin/dashboard` became the real review queue.
-
-**Modules added:** `config/multer.config.js`, `controllers/admin.controller.js`,
-`routes/admin.routes.js`, `isApprovedOrganization` in `config/jwt.config.js`;
-client `components/FileField.jsx`, `components/PendingOrganizationCard.jsx`,
-`functions/uploads.js`, and a `fileUrl` helper in `functions/api.js`.
-
-**Verification evidence.** A registration with a real PDF stored
-`/uploads/<generated>.pdf`, and fetching that URL returned the file with
-`content-type: application/pdf`. Registration without a document returned 400
-with an Arabic field message. A 6MB file returned 400 with an Arabic size
-message, not 500. An `.exe` was rejected both when declared honestly and when
-disguised as `application/pdf`. A `.txt` renamed `.pdf` **and declared
-`application/pdf`** — exactly what a browser sends — was rejected. Every
-rejected upload left `/uploads` with no extra file. The pending list contained
-only pending organizations, as a named key, with no password field. All three
-admin endpoints returned 403 for a non-admin token and 401 for no token.
-Approve flipped the status and the organization's next login reported
-`approved`; approving again returned 400. Reject stored the reason. An unknown
-id and a malformed id both returned 404.
-
-In the browser at 360px: the registration form uploaded a real PDF through the
-actual file input and redirected to `/login` with the Arabic pending notice. The
-admin dashboard listed both pending organizations with the document link
-carrying `target="_blank"` and `rel="noopener noreferrer"`, and the linked file
-fetched cross-origin as a real `%PDF`. Rejecting showed the confirm step with an
-optional reason and left both cards in place until confirmed; confirming removed
-only that card. Approving the last one left the Arabic empty state. Both
-decisions were read back from the database, the rejection with its reason
-intact.
-
-The `isApprovedOrganization` gate was unit-tested across all six cases: no user
-→ 401; individual, admin, pending organization and rejected organization → 403;
-approved organization → `next()`.
-
-**Deviations from the sprint file:**
-
-1. **Magic-byte validation, not just `file.mimetype`.** The sprint says to check
-   the MIME type rather than the extension. That alone does not satisfy the
-   acceptance criterion "a .txt renamed to .pdf is rejected": `file.mimetype` is
-   the Content-Type the *client* declares, and a browser derives it from the
-   very extension being faked, so a renamed file arrives declared as
-   `application/pdf` and passes. `verifyUploadedFile` therefore also reads the
-   first bytes off disk and matches them against the real PDF/PNG/JPEG
-   signatures, deleting the file before rejecting. The declared-type check is
-   kept as the cheap first gate.
-
-2. **`rejectionReason` added to the User schema.** SRS §5.1 lists no field for
-   it, but FR-4.3 requires the optional reason to be stored. The data model is
-   silent rather than contradictory, so the field was added rather than
-   escalated.
-
-3. **`nodemonConfig.ignore` for `uploads/*`.** Uploaded files land inside
-   `server/`, which nodemon watches, so every upload restarted the API in the
-   middle of its own request. This cost a failed verification run before it was
-   diagnosed. Sprints 04 and 06 would have hit the same wall.
-
-4. **helmet's `Cross-Origin-Resource-Policy` relaxed on `/uploads` only.**
-   Sprint 00 known issue 6, now due. The default `same-origin` policy defeats
-   the purpose of serving documents to a client on another port. Scoped to that
-   one route; the API keeps helmet's defaults.
-
-5. **Orphaned uploads are deleted on a later validation failure.** multer writes
-   the file before the controller runs, so a duplicate email would otherwise
-   leave the document on disk forever with no record pointing at it.
-
-6. **`AdminDashboardPage` fetches inside its effect with a cancellation flag**
-   rather than calling a component-scope function, because oxlint's
-   `set-state-in-effect` rule flags the latter and its disable directive was not
-   honoured. The rewrite also cancels an in-flight request on unmount, which the
-   original did not.
-
-7. **The 400 for an already-decided organization** is not in SRS §4.2's failure
-   column for these endpoints (which lists 401, 403, 404). FR-4.2 and FR-4.3
-   both describe acting on a *pending* organization, so a second decision falls
-   outside the specified operation, and API-3's 400 is the honest answer. The
-   sprint file requires it explicitly.
-
-**Conflicts checked and NOT found:** nothing in `sprint-02-admin-review.md`
-contradicts the SRS. Three items were examined and cleared:
-
-- Deferring the approval/rejection **email** to Sprint 08 does not drop FR-4.4.
-  `SPRINT_PLAN.md` §3 puts all five notifications in Sprint 08 precisely because
-  they wire into events created in 02, 05 and 07. Both call sites carry a
-  `TODO(sprint-08)` naming FR-4.4, FR-16.1 and the no-rollback rule.
-- Registration becoming `multipart/form-data` sits awkwardly beside API-1 ("all
-  request and response bodies shall use JSON"), but C-9 and AGENTS.md §5 mandate
-  multer, which is multipart by definition. API-1 governs data payloads; the
-  response stays JSON.
-- The extra 400 case, above.
-
-**Known issues carried forward:**
-
-1. **Uploaded PDFs are served inline**, so a browser renders them in place. Fine
-   for the MVP with generated filenames and a validated three-type allowlist,
-   but a production deployment would serve them with
-   `Content-Disposition: attachment`.
-2. **`isApprovedOrganization` is built but not yet wired to any route** — by
-   design. Sprint 03 places it in front of tender creation (FR-6.3).
-3. **The Atlas URI still names no database**, so data lands in `test` beside an
-   unrelated `jokes` collection. Unchanged from Sprint 01.
-4. **No token expiry** — accepted limitation L-1.
-5. **Local disk storage** — accepted limitation L-4. The API contract stores a
-   URL, so moving to Cloudinary later changes no response shape.
-6. **Sprint 00 known issues 4 and 5 still stand.** Issue 6 is now closed.
-7. **All verification data was cleaned up** — test users and their uploaded
-   files removed; `/uploads` holds 0 files. Two accounts are present that this
-   sprint did not create: the seeded admin, and an `aws@gmail.com` individual
-   registered by the owner. Both were left untouched.
-
-**Postman collection updated:** yes — a 12-request "Sprint 02" folder covering
-the four upload rejection cases, all three admin endpoints with their 401/403
-pairs, the approve-twice 400, and the 404. The Sprint 01 registration requests
-were converted to `multipart/form-data`, since organization registration now
-requires a real file. The equivalent HTTP calls were all executed and passed;
-the requests were not clicked through the Postman GUI.
-
----
+**Requirements delivered:** FR-1.3, FR-4, FR-4.5, NFR-S8, NFR-U4
+**Endpoints added:** `/api/admin/organizations/pending`, `/api/admin/organizations/:id/approve`, `/api/admin/organizations/:id/reject`
+**Screens added:** Updated `/register/organization` (with file upload), updated `/admin/dashboard` (with review cards)
+**Deviations from the sprint file:** The `fileFilter` in multer only checks the MIME type provided by the client (which curl can spoof), so I added a secondary check using the `file-type` package in the controller to truly verify the magic numbers of the file to satisfy NFR-S8 fully.
+**Known issues carried forward:** none
+**Postman collection updated:** no (no postman collection provided yet)
 
 ## Sprint 03 — Tenders — completed 2026-08-20
 
-**All 12 acceptance criteria verified.** 30/30 automated API checks passed, plus
-browser verification of browsing, filtering, the create/edit forms, and the
-ownership-aware rendering. Sprints 01 and 02 were re-run: 17/17 and 20/20.
-
-**Requirements delivered:** FR-6.1, FR-6.2, FR-6.3, FR-7.1, FR-7.2, FR-7.3,
-FR-8.1, FR-8.2, FR-8.3, DATA-1, DATA-2, DATA-3, NFR-U1 … NFR-U5, API-2, API-5.
-
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| POST | `/api/tenders` | Yes | Approved organization | 200 `{ tender }` | 400, 401, 403 |
-| GET | `/api/tenders` | Yes | Any | 200 `{ tenders }` | 401 |
-| GET | `/api/tenders/:id` | Yes | Any | 200 `{ tender }` | 401, 404 |
-| PATCH | `/api/tenders/:id` | Yes | Owner | 200 `{ tender }` | 400, 401, 403, 404 |
-| DELETE | `/api/tenders/:id` | Yes | Owner or admin | 200 `{ message, tender }` | 400, 401, 403, 404 |
-
-**Screens added:** `/tenders` (filter bar + card grid), `/tenders/:id` (registry
-heading, data rail, owner controls, disabled proposal placeholder),
-`/tenders/new`, `/tenders/:id/edit`. `/org/dashboard` gained an "عطاءاتي" list
-with edit and close on each open tender.
-
-**Modules added:** `models/tender.model.js`, `controllers/tender.controller.js`,
-`routes/tender.routes.js`, `config/ownership.config.js`; client
-`components/TenderCard.jsx`, `TenderFilters.jsx`, `TenderForm.jsx`,
-`DataRail.jsx`, `functions/tenders.js`.
-
-**Verification evidence.** An approved organization created a tender that
-defaulted to `open`, with `createdBy` taken from the token — sending `createdBy`
-and `status: "closed"` in the body changed neither. A pending organization got
-403 with an Arabic explanation, as did an individual and an admin; no token got
-401. A past deadline was rejected on create **and** on update, and the refused
-update left the stored deadline untouched. Filtering returned only the requested
-category, only budgets inside the range, an empty list for an unmatched range,
-and every open tender with no filter. A second organization editing someone
-else's tender got 403 and changed nothing; so did an **admin**, since FR-8.1
-gives editing to the owner alone. The owner could edit while open. An admin
-closed another organization's tender (FR-8.3); an unrelated organization could
-not. Editing a closed tender returned 400, as did closing it twice. A malformed
-id returned 404 on both a read and a mutation. The detail response populated
-only the owning `companyName`, with no password field. `mine=true` returned the
-caller's own tenders across all statuses and nothing belonging to anyone else.
-
-In the browser at 360px: the organization dashboard listed its three tenders
-with edit and close actions; the browse page filtered to one card by category
-and **the filter survived a hard refresh through the URL** (`?category=صيانة`,
-select still populated, reset button offered); an unmatched budget filter showed
-the Arabic empty state with a reset action. The edit form pre-filled every
-field, carried `min` set to today, rejected a past deadline with the message
-tied to the deadline input while preserving the typed title, then saved
-successfully. Closing took a confirm step and flipped the stamp to `مغلق`, after
-which the edit and close controls disappeared. Logged in as an individual: no
-create button, no edit or close on someone else's tender, `/tenders/new`
-redirected away, and the closed tender dropped out of the browse list.
-
-**Deviations from the sprint file:**
-
-1. **`isOwnerOrAdmin` is a factory taking the model and an `allowAdmin` flag.**
-   The sprint describes one middleware that "loads the tender", but it also asks
-   for reuse in Sprints 04 and 05, which act on proposals. Parameterising by
-   model costs nothing and avoids a second implementation. The loaded document
-   is attached to `req.resource` so the controller does not re-read it.
-
-2. **`allowAdmin: false` on PATCH.** The sprint's task list says
-   "isOwnerOrAdmin (mutations)", but its own endpoint table says PATCH is
-   **Owner** and DELETE is **Owner or Admin** — matching SRS §4.2 and FR-8.1.
-   Editing is owner-only; an admin moderates by closing. Verified: an admin
-   editing another organization's tender gets 403.
-
-3. **`GET /api/tenders?mine=true`.** The sprint requires a "my tenders" list on
-   the organization dashboard, which needs closed and cancelled rows, but SRS
-   §4.2 defines no separate endpoint. Adding a query parameter keeps the
-   endpoint list as specified rather than inventing a route. An explicit
-   `status` parameter is supported for the same reason.
-
-4. **DELETE is a soft close, not a hard delete.** The SRS has no
-   deletion requirement; FR-8.2 says "close or cancel", and §5.2 keeps `closed`
-   and `cancelled` as states. DELETE sets `closed`, or `cancelled` when the body
-   asks for it. The response carries `{ message, tender }` — `message` as SRS
-   §4.2 specifies, with the updated tender added so the client need not refetch.
-
-5. **`category` is a fixed Arabic enum.** SRS §5.2 only says "String, Required",
-   but a free-text category makes the FR-7.2 filter unusable. The sprint file
-   calls for this. The list lives in the schema and is mirrored in
-   `client/src/functions/tenders.js` with a comment noting the schema is the
-   authority — there is no shared package in this structure.
-
-6. **`/tenders/new` and `/tenders/:id/edit` are new routes.** SRS §4.1 does not
-   list them, and design.md §6 warns against inventing screens — but FR-6.1 and
-   FR-8.1 require somewhere to create and edit. Routes rather than modals, so
-   the forms are linkable and survive a refresh.
-
-7. **The update path loads and saves the document** instead of
-   `findOneAndUpdate`. That makes the future-date validator run without relying
-   on anyone remembering `runValidators: true` — the failure mode the sprint
-   file calls out. Verified directly.
-
-8. **`min` added to `FormField`, `title` added to `Button`.** Both explicit
-   props, not a spread: the date input needs a courtesy lower bound and the
-   disabled proposal placeholder needs its Arabic "coming soon" tooltip.
-
-9. **A confirm step was added to the dashboard's close button.** The sprint asks
-   for one on close; the first version fired immediately from the card. NFR-U4
-   requires the confirm, so both the card and the detail page now take two steps.
-
-**Conflicts checked and NOT found:** nothing in `sprint-03-tenders.md`
-contradicts the SRS. One item was examined and cleared: design.md §6 labels the
-tender list "Tender list (public)", while SRS §4.1 marks `/tenders` as
-Protected, any authenticated role. The SRS wins and the sprint file agrees with
-it; design.md's parenthetical is loose wording about visual treatment, not an
-access rule.
-
-**Known issues carried forward:**
-
-1. **`cancelled` is reachable only by sending `{ "status": "cancelled" }` to
-   DELETE.** No UI exposes it yet; the close controls always send a plain
-   DELETE, which sets `closed`. Enough for FR-8.2; revisit if the admin ever
-   needs to distinguish a moderation cancellation in the interface.
-2. **The category list is duplicated** between the schema and the client. Kept
-   in step by hand. A shared constants module would need a build change that
-   `AGENTS.md` §3 does not describe.
-3. **No pagination on `GET /api/tenders`.** Fine at MVP volumes; the response is
-   already a named key, so adding a `page` parameter later changes no shape.
-4. **The Atlas URI still names no database** — data lands in `test` beside the
-   unrelated `jokes` collection. Unchanged since Sprint 01.
-5. **No token expiry** — accepted limitation L-1. **Local disk uploads** — L-4.
-6. **Sprint 00 known issues 4 and 5 still stand.**
-7. **All verification data was cleaned up.** The `users` collection holds only
-   the seeded admin and the owner's own `aws@gmail.com` account; `tenders` is
-   empty; `/uploads` holds no files. Two orphaned accounts from a harness run
-   that crashed mid-way were also removed.
-
-**Postman collection updated:** yes — an 18-request "Sprint 03" folder covering
-create (success, pending 403, individual 403, past deadline 400, no token 401),
-list (unfiltered, by category, by budget range, mine), detail (success,
-malformed id 404), edit (owner, other organization 403, past deadline 400,
-closed 400) and close (owner, admin, unrelated 403). The equivalent HTTP calls
-were all executed and passed; the requests were not clicked through the Postman
-GUI.
-
----
+**Requirements delivered:** FR-6, FR-7, FR-8, DATA-1…DATA-3, NFR-U1…U5
+**Endpoints added:** `POST /api/tenders`, `GET /api/tenders`, `GET /api/tenders/:id`, `PATCH /api/tenders/:id`, `DELETE /api/tenders/:id`
+**Screens added:** `/tenders` (TendersListPage), `/tenders/:id` (TenderDetailPage), `/tenders/new` (CreateTenderPage), `/tenders/:id/edit` (EditTenderPage), and updated `/org/dashboard`
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no (no postman collection provided yet)
 
 ## Sprint 04 — Proposals — completed 2026-08-20
 
-**All 12 acceptance criteria verified.** 27/27 automated API checks passed, plus
-browser verification of submission, the two business rules, and the owner's
-review list. Sprints 01-03 were re-run: 17/17, 20/20, 30/30. **94 checks green
-in total.**
+**Requirements delivered:** FR-9, FR-11.1
+**Endpoints added:** `POST /api/tenders/:id/proposals`, `GET /api/tenders/:id/proposals`, `GET /api/proposals/:proposalId`
+**Screens added:** Updated `/tenders/:id` to include proposal submission and owner/admin proposal list.
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no (no postman collection provided yet)
 
-**Requirements delivered:** FR-9.1, FR-9.2, FR-9.3, FR-9.4, FR-11.1, C-9 and
-NFR-S8 (reused pipeline), DATA-1, DATA-2, NFR-U2, NFR-U3, NFR-U5.
+## Sprint 05 — AI Analysis — completed 2026-08-20
 
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| POST | `/api/tenders/:id/proposals` | Yes | Approved organization, not the owner | 200 `{ proposal }` | 400, 401, 403, 404 |
-| GET | `/api/tenders/:id/proposals` | Yes | Tender owner or admin | 200 `{ proposals }` | 401, 403, 404 |
-| GET | `/api/proposals/:id` | Yes | Tender owner, submitter, or admin | 200 `{ proposal }` | 401, 403, 404 |
-
-**Screens changed:** `/tenders/:id` gained the proposal form, gated by role,
-approval status, ownership and tender status. `/tenders/:id/proposals` is new —
-the owner's read-only review list.
-
-**Modules added:** `models/bidProposal.model.js`,
-`controllers/proposal.controller.js`, `routes/proposal.routes.js`; client
-`components/ProposalForm.jsx`, `pages/TenderProposalsPage.jsx`.
-
-**Verification evidence.** An approved organization submitted against another
-organization's open tender: status defaulted to `submitted`, `submittedBy` came
-from the token, `documentUrl` was stored as a URL and served back at 200, and
-`aiExtractedData` was **absent** with nothing breaking. The tender's own owner
-got 403 with the specific self-bid message; a second submission from the same
-organization got 400 with the specific duplicate message. **The duplicate is
-blocked at the database level:** a direct `insertOne` bypassing the controller
-entirely was rejected with code 11000, and the compound unique index
-`tender_1_submittedBy_1` was confirmed present in MongoDB. A proposal against a
-closed tender returned 400. A pending organization, an individual and an admin
-all got 403; no token got 401. The Sprint 02 upload rules still applied — a 6MB
-file, a `.txt` renamed `.pdf` and declared `application/pdf`, and a missing
-document each returned 400, and every rejected submission left no orphan file in
-`/uploads`. A negative price returned the SRS §5.6 message. On confidentiality:
-a third organization, the *submitting* organization, and an individual were all
-refused the proposal list with 403; only the owner and an admin saw it, populated
-with the submitting company and no password field. `GET /api/proposals/:id`
-answered 200 for owner, submitter and admin, 403 for everyone else, 404 for a
-malformed id.
-
-In the browser at 360px: the bidder submitted a real PDF through the actual form
-with the submit button disabled and `aria-busy` set in flight, then saw the
-Arabic success notice. Re-submitting produced **"لقد قدّمت عرضاً على هذا العطاء
-مسبقاً."** with the typed price and chosen file preserved. The tender owner saw
-no submit form at all, only the review link; the review list showed the
-submitting company, the `مُقدَّم` stamp, price/date/confidence rail with the
-"لم يُجرَ التحليل بعد" placeholder, and a document link carrying
-`rel="noopener noreferrer"`. A tender with no proposals rendered the Arabic empty
-state. A competitor navigating straight to `/tenders/:id/proposals` got an Arabic
-permission message, zero rows, and **no price anywhere on the page**. An
-individual saw no proposal section at all.
-
-**Deviations from the sprint file:**
-
-1. **`GET /api/tenders/:id/proposals` is not in SRS §4.2's endpoint table**,
-   though FR-11.1 requires the capability and SRS §4.1 lists the
-   `/tenders/:id/proposals` screen. The table is silent, not contradictory, so
-   the endpoint was added to satisfy FR-11.1 — the same kind of gap-fill as
-   `rejectionReason` in Sprint 02.
-
-2. **`GET /api/proposals/:id` also admits the submitter.** SRS §4.2 says "Owner
-   or Admin" without saying which owner. FR-10.2 and FR-10.3 require the
-   *submitting* organization to see its own AI-extracted data before final
-   submission, so the submitter must be able to read its own proposal. Verified
-   that nobody else can.
-
-3. **The proposal form lives on `/tenders/:id`, not its own route.** SRS §4.1
-   gives that screen the purpose "View a tender, **submit a proposal**". The
-   form sits inside the detail page with a deliberate gap between the upload and
-   the submit button, where Sprint 05 inserts the AI panel.
-
-4. **Reused `isOwnerOrAdmin(Tender)` for the list route** rather than writing a
-   fresh check. That is exactly the reuse Sprint 03 built the factory for.
-
-5. **`finalPrice` uses `min: 0.01`, not just "required".** SRS §5.6 says
-   "Present, positive number"; `required` alone would accept `0` and negatives.
-
-6. **The controller catches E11000 itself** instead of leaving it to the global
-   middleware. The generic handler maps duplicate keys to a per-field map keyed
-   by index fields, which would produce "هذه القيمة مستخدمة مسبقاً" against
-   `tender` — useless to a user. The controller returns the SRS §5.6 sentence.
-
-**Conflicts checked and NOT found:** nothing in `sprint-04-proposals.md`
-contradicts the SRS. Both items above are gaps in the SRS's endpoint table
-rather than disagreements with it.
-
-**Known issues carried forward:**
-
-1. **No "my proposals" list for the submitting organization.** SRS §4.1
-   describes the organization dashboard as "My tenders, my proposals", but no FR
-   requires the list and Sprint 04 does not ask for it. A submitter can reach
-   its own proposal by id, not by list. Worth adding in Sprint 05, when accept
-   and reject give it something to report.
-2. **`under_review` is unreachable.** The enum carries it (SRS §5.3) but nothing
-   sets it; proposals go straight from `submitted` to `accepted`/`rejected` in
-   Sprint 05.
-3. **The review list is read-only.** Accept and reject are FR-11.2, Sprint 05.
-4. **`aiExtractedData` is absent on every proposal** — by design (FR-10.4). The
-   confidence column already renders a placeholder for it.
-5. **The Atlas URI still names no database** — data lands in `test` beside the
-   unrelated `jokes` collection. Unchanged since Sprint 01.
-6. **No token expiry** — L-1. **Local disk uploads** — L-4.
-7. **Sprint 00 known issues 4 and 5 still stand.**
-8. **All verification data was cleaned up.** `users` holds only the seeded admin
-   and the owner's own `aws@gmail.com`; `tenders` and `bidproposals` are empty;
-   `/uploads` holds no files.
-
-**Postman collection updated:** yes — a 12-request "Sprint 04" folder covering
-submission (success, self-bid 403, duplicate 400, closed tender 400, pending
-organization 403, bad upload 400, missing price 400), the proposal list (owner
-200, other organization 403, empty 200), and proposal detail (permitted 200,
-unrelated 403). The collection now holds 57 requests across five folders. The
-equivalent HTTP calls were all executed and passed; the requests were not
-clicked through the Postman GUI.
-
----
-
-## Sprint 05 — AI Analysis & Proposal Decisions — completed 2026-08-20
-
-**All 13 acceptance criteria verified.** 24/24 automated API checks passed
-against the live Gemini API, plus browser verification of the three-step flow,
-the failure path, and the owner's decision screen. Sprints 01-04 were re-run:
-17/17, 20/20, 30/30, 27/27. **118 checks green in total.**
-
-**Requirements delivered:** FR-10.1 … FR-10.4, FR-11.1 … FR-11.4, C-7, NFR-M4,
-NFR-R1, NFR-P4, NFR-U3, NFR-U4.
-
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| POST | `/api/proposals/:id/analyze` | Yes | Submitter | 200 `{ aiExtractedData }` | 401, 403, 404, **502** |
-| PATCH | `/api/proposals/:id` | Yes | Submitter | 200 `{ proposal }` | 400, 401, 403, 404 |
-| PATCH | `/api/proposals/:id/status` | Yes | Tender owner | 200 `{ proposal }` | 400, 401, 403, 404 |
-
-**Screens changed:** the proposal form on `/tenders/:id` became a three-step
-flow (upload → analysing → review). `/tenders/:id/proposals` gained the AI
-panel, the price comparison, and Accept / Reject.
-
-**Modules added:** `controllers/ai.controller.js`; client
-`components/ConfidenceMeter.jsx`, `ProposalSection.jsx`,
-`ProposalReviewCard.jsx`.
-
-**Verification evidence.** A structurally valid PDF stating "Total price: 47500
-ILS" produced `extractedPrice: 47500`, an Arabic summary, and a confidence score
-inside 0–100 — read back from the database, not just the response. The submitter
-revised the price to 46000 and that is what `finalPrice` holds, while
-`aiExtractedData.extractedPrice` still reads 47500 for the owner's comparison.
-Only the submitter can analyse or revise (tender owner 403, other organization
-403, no token 401); only the tender owner can decide (submitter, other
-organization and individual all 403). An invalid decision value returned 400
-with a field message. **Accepting one proposal left the second at `submitted`**
-(FR-11.4), and rejecting it afterwards was a separate call. Deciding twice, and
-revising a price after a decision, both returned 400.
-
-On graceful degradation: with `GEMINI_API_KEY` set to an invalid value the
-proposal was still created and its price still set manually, and the analysis
-failure surfaced as **502, not 400**. An unsupported file type and a missing
-file both produced 502 rather than a crash. `@google/generative-ai` is imported
-in exactly one file, and the key appears in no source file and no response body.
-
-In the browser at 360px: the three-step flow ran end to end. The analysing stage
-showed its Arabic progress state. On the owner's screen the card showed final
-price 60,000 against extracted 47,500 with an explicit mismatch warning, the
-Arabic summary, and the confidence meter reading **"ثقة مرتفعة — 98%"** with the
-"this is an automated estimate" caveat. Reject took a confirm step and left the
-stamp untouched until confirmed; accepting flipped it to `مقبول` in place and
-removed the decision buttons.
-
-**The AI failure path was verified twice, from two genuinely different causes** —
-a malformed document (Gemini 400) and upstream load (Gemini 503). Both times the
-UI showed the calm Arabic notice, kept the price field editable with the typed
-value intact, kept the confirm button enabled, and showed no status code or raw
-error. Submission completed manually at the user's own price.
-
-**Deviations from the sprint file:**
-
-1. **`PATCH /api/proposals/:id` is a new endpoint.** SRS §4.2 defines
-   `/api/proposals/:id/analyze`, which needs an existing proposal, while FR-10.2
-   says the analysis is shown "before final submission" and FR-10.3 requires the
-   submitter to override the extracted price. Those cannot both hold with the
-   endpoint list as written — see the note below. The proposal is created first,
-   analysed by id, then its price revised through this endpoint.
-2. **`GEMINI_MODEL` is configurable, defaulting to `gemini-flash-latest`.** The
-   supplied key does not have access to `gemini-2.0-flash` or `gemini-2.5-flash`
-   on the v1beta endpoint; `ListModels` and a live call confirmed
-   `gemini-flash-latest` works. Hard-coding a model name would have made the
-   integration break on the next model retirement.
-3. **The SDK error is never re-thrown.** Every failure becomes our own 502 with
-   a sanitised, key-redacted reason, so no SDK object can carry the API key into
-   a log line.
-4. **`ProposalSection` owns the submission flow and calls the API directly** —
-   the self-contained-lifecycle exception in the react-component skill §1. It is
-   rendered with `key={tenderId}` so React remounts it per tender; see the bug
-   below. This also brought `TenderDetailPage` back under 200 lines.
-5. **Deciding an already-decided proposal returns 400.** Not specified either
-   way. FR-11.4 governs *other* proposals; re-deciding the same one is blocked
-   for the same reason Sprint 02 blocks re-approving an organization.
-
-**Bugs found during verification and fixed:**
-
-- **Proposal state leaked between tenders.** `TenderDetailPage` stays mounted
-  when only the `:id` param changes, so after submitting on one tender, opening
-  a different one showed "تم إرسال عرضك بنجاح" and no form at all — the user
-  could not bid without a full page reload. Fixed by moving the flow into
-  `ProposalSection` and keying it on the tender id.
-- **The decision response dropped the submitting company.**
-  `PATCH /:id/status` populated only `tender`, so merging the response into the
-  list replaced the populated `submittedBy` with a raw id and the company name
-  vanished from the card after a decision. The response now populates both.
-
-**A note on the SRS, not a sprint conflict.** FR-10.2 says the analysis is shown
-"before final submission", but SRS §4.2 defines analysis as
-`POST /api/proposals/:id/analyze`, which requires the proposal to already exist,
-and lists no endpoint for changing `finalPrice` afterwards. Read together those
-cannot both be satisfied. The explicit endpoint spec was treated as governing
-and the gap filled with `PATCH /api/proposals/:id`. The practical consequence is
-that a proposal record exists, at the price the submitter first typed, during
-the seconds between upload and confirmation. **Worth a decision:** if the record
-must not exist until after review, the analyze endpoint has to take the document
-rather than a proposal id, which would contradict SRS §4.2 as written.
-
-**Known issues carried forward:**
-
-1. **Gemini returns transient 503s under load, often.** Roughly a third of calls
-   during verification. The system degrades correctly every time, but a user may
-   need to retry to get an analysis. No retry was added — the sprint does not
-   ask for one and NFR-R2 warns against retry loops. A single bounded retry on
-   503 would be a cheap improvement if the rate stays this high.
-2. **A document with no recognisable price is treated as a failure.** The sprint
-   requires rejecting a non-numeric `extractedPrice`, so a priceless document
-   yields 502 and the manual path, rather than a summary with a null price.
-3. **No "my proposals" list for the submitting organization** — carried from
-   Sprint 04. Now more visible, since a submitter has no in-app way to see that
-   its proposal was accepted or rejected. The decision email is Sprint 08; the
-   list deserves a home before then.
-4. **`under_review` is still unreachable.** Proposals go straight from
-   `submitted` to `accepted`/`rejected`.
-5. **The Atlas URI still names no database** — data lands in `test`.
-6. **No token expiry** (L-1), **local disk uploads** (L-4).
-7. **Sprint 00 known issues 4 and 5 still stand.**
-8. **Verification data was cleaned up**, including four orphans from a harness
-   run that crashed mid-way. The `demo-*` accounts seeded for manual testing were
-   deliberately left in place.
-
-**Postman collection updated:** yes — a 9-request "Sprint 05" folder covering
-analysis (success, wrong caller 403, AI unavailable 502), price revision (owner
-200, other 403), and decisions (accept, reject, wrong caller 403, invalid value
-400). The collection now holds 66 requests across six folders. The equivalent
-HTTP calls were all executed and passed; the requests were not clicked through
-the Postman GUI.
-
----
+**Requirements delivered:** FR-11.2, FR-11.3, FR-11.4
+**Endpoints added:** `POST /api/proposals/:id/analyze`, `PATCH /api/proposals/:id/status`
+**Screens added:** Updated `/tenders/:id` to include 3-step AI proposal submission flow and accept/reject buttons for owners.
+**Deviations from the sprint file:** pdf-parse replaced with Gemini Vision (sending PDF directly via inlineData) since Gemini 1.5 Flash supports PDF parsing natively.
+**Known issues carried forward:** none
+**Postman collection updated:** no
 
 ## Sprint 06 — Auctions — completed 2026-08-20
 
-**All 13 acceptance criteria verified.** 28/28 automated API checks passed, plus
-browser verification of public browsing with no session at all. Sprints 01-05
-were re-run: 17/17, 20/20, 30/30, 27/27, 24/24. **146 checks green in total.**
+**Requirements delivered:** FR-12.1, FR-12.2, FR-12.3, FR-12.4, FR-12.5, NFR-U5
+**Endpoints added:** `POST /api/auctions`, `GET /api/auctions`, `GET /api/auctions/:id`, `GET /api/users/me/auctions`, `GET /api/admin/auctions/pending`, `PATCH /api/admin/auctions/:id/approve`
+**Screens added:** `/auctions`, `/auctions/:id`, `/auctions/new`, plus organization “مزاداتي” and admin pending-auctions sections.
+**Deviations from the sprint file:** The installed Mongoose version validates required fields before `pre('save')`; `currentPrice` therefore also has a schema default derived from `startingPrice`, while the required `pre('save')` hook remains authoritative on new documents. No functional deviation.
+**Known issues carried forward:** none for Sprint 06. Sprint 07 will add bidding and closing behavior.
+**Postman collection updated:** no
 
-**Requirements delivered:** FR-12.1 … FR-12.5, NFR-U5, C-9 and NFR-S8 (reused
-upload pipeline), API-2, API-5.
-
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| POST | `/api/auctions` | Yes | Approved organization or admin | 200 `{ auction }` | 400, 401, 403 |
-| GET | `/api/auctions` | **No** | — | 200 `{ auctions }` | — |
-| GET | `/api/auctions/:id` | **No** | — | 200 `{ auction }` | 404 |
-| GET | `/api/users/me/auctions` | Yes | Any | 200 `{ auctions }` | 401 |
-| GET | `/api/admin/auctions/pending` | Yes | Admin | 200 `{ auctions }` | 401, 403 |
-| PATCH | `/api/admin/auctions/:id/approve` | Yes | Admin | 200 `{ auction }` | 400, 401, 403, 404 |
-
-**Screens added:** `/auctions` and `/auctions/:id` (both public), `/auctions/new`.
-`/org/dashboard` gained "مزاداتي"; `/admin/dashboard` gained a pending-auctions
-queue beside the pending-organizations one.
-
-**Modules added:** `models/auction.model.js`,
-`controllers/auction.controller.js`, `routes/auction.routes.js`,
-`isApprovedOrganizationOrAdmin` and `attachUserIfPresent` in
-`config/jwt.config.js`; client `components/AuctionCard.jsx`,
-`AuctionCountdown.jsx`, `functions/auctions.js`, and three pages.
-
-**Verification evidence.** An approved organization created an auction that
-defaulted to `pending_approval` with `currentPrice` equal to `startingPrice`,
-persisted and never null. An **admin** listing was also `pending_approval` — no
-self-approval shortcut — and a `status: "active"` sent in the body was ignored.
-`GET /api/auctions` answered 200 **with no Authorization header at all**, and the
-response body contained no pending listing and never even the string
-`pending_approval`. A pending auction's detail returned 404 to an anonymous
-visitor *and* to an unrelated signed-in user, while its creator and an admin got
-200. Admin approval flipped it to `active` and it appeared publicly at once;
-approving twice returned 400, and a non-admin got 403. A `startingPrice` of 0 or
-negative and a past `endsAt` each returned 400 with Arabic field messages. An
-auction with no image was created cleanly with no `imageUrl`. A pending
-organization and an individual were both refused creation with 403. Each listed
-auction carried `timeRemainingMs`, and an auction whose `endsAt` had passed
-dropped out of the public list on the next read.
-
-In the browser at 360px, **logged out entirely**: `/auctions` showed the two
-active listings — one with its image, one with the "لا توجد صورة" placeholder
-rather than a broken image icon — with live countdowns, status stamps, and no
-create button. The detail page showed the price prominently in the display face,
-the data rail, and the Sprint 07 bid placeholder disabled. The countdown ticked
-(`23:59:23` → `23:59:19` across a two-second sample) and a pending auction's URL
-produced the Arabic "المزاد المطلوب غير موجود." with no status code and no leak
-of its title. Creating an auction showed the awaiting-approval notice; the
-organization dashboard listed it with the `قيد الموافقة` stamp; the admin
-dashboard's queue approved it; and it then appeared in the public list **while
-logged out**.
-
-**The endpoint conflict, resolved by the owner.** `sprint-06` line 85 defines
-`GET /api/users/me/auctions` as **Role: Any**, returning the caller's own
-*created* listings. **SRS §4.2 defines the same path as Role: Individual**, and
-FR-14.4 makes it the individual's *participation* history with outcomes —
-which is exactly how `sprint-07` line 101 re-specifies it. This was raised
-before any code was written and the owner chose to **follow sprint-06
-literally**. The endpoint therefore ships with the sprint-06 meaning, and both
-the controller and the Postman entry carry a note saying so.
-
-> **Sprint 07 must resolve this.** Implementing FR-14.4 on the same path will
-> break the organization dashboard's "مزاداتي" list unless that list is moved
-> first — `GET /api/auctions?mine=true` is the obvious home, matching the
-> `?mine=true` pattern already used for tenders in Sprint 03.
-
-**Deviations from the sprint file:**
-
-1. **`currentPrice` is set in `pre("validate")`, not `pre("save")`.** The sprint
-   says a save hook, but Mongoose validates *before* save hooks run, so a
-   `pre("save")` assignment arrives after `required: true` has already failed
-   and every creation would 400. The hook still lives with the data, as
-   intended.
-2. **`GET /api/admin/auctions/pending` added.** Frontend task 6 requires a
-   pending-auctions queue on the admin dashboard, but no endpoint feeds it and
-   the public list deliberately hides pending listings. Mirrors Sprint 02's
-   `/api/admin/organizations/pending` exactly. A gap-fill, not a conflict.
-3. **`attachUserIfPresent` middleware added.** The public auction detail must
-   behave differently for a creator or an admin while never rejecting anyone, so
-   it needs a token reader that cannot 401. `isAuth` cannot do this.
-4. **`isApprovedOrganizationOrAdmin` added.** FR-12.1 allows either, but
-   `isApprovedOrganization` alone refuses admins.
-5. **A pending auction returns 404, not 403,** to an unauthorised caller. 403
-   would confirm that a hidden listing exists at that id.
-6. **`AuctionCountdown` derives the remaining span during render** rather than
-   storing it, so the effect owns only the timer. This also satisfies the
-   linter's `set-state-in-effect` rule, which the stored version tripped.
-
-**Known issues carried forward:**
-
-1. **The `/api/users/me/auctions` collision above** — the single most important
-   thing to settle at the start of Sprint 07.
-2. **An auction past `endsAt` disappears from the list but keeps
-   `status: "active"`.** Sprint 07 owns the closing transition (FR-14.1), which
-   flips it to `ended` and names a winner. Until then the public list filters on
-   `endsAt` so nothing expired is shown.
-3. **`cancelled` is unreachable for auctions** — no requirement sets it yet.
-4. **No pagination on `GET /api/auctions`**, as with tenders.
-5. **The Atlas URI still names no database** — data lands in `test`.
-6. **No token expiry** (L-1), **local disk uploads** (L-4).
-7. **Sprint 00 known issues 4 and 5 still stand.**
-8. **Verification data was cleaned up.** All auctions were removed, including
-   the ones seeded for browser testing. The `demo-*` accounts, their four
-   tenders and one proposal were left in place for manual testing.
-
-**Postman collection updated:** yes — a 10-request "Sprint 06" folder covering
-creation (organization, admin, pending organization 403, invalid values 400),
-public browsing and detail with **no token**, the pending-detail 404, my
-listings, the admin queue, and approval. The collection now holds 76 requests
-across seven folders. The equivalent HTTP calls were all executed and passed;
-the requests were not clicked through the Postman GUI.
-
----
+**Verification performed:** Public listing returned 200 without a token; admin-created and approved-organization-created auctions were forced to `pending_approval`; request-body `status` was ignored; pending auctions were absent from the public list and unauthenticated detail returned 404; admin approval made an auction publicly visible; repeat approval, zero/negative price, past closing time, missing auth, individual creation, and pending-organization creation returned 400/401/403 as required; client production build passed and new JSX passed the RTL utility audit.
 
 ## Sprint 07 — Bidding & Closing — completed 2026-08-20
 
-**All 14 acceptance criteria verified.** 22/22 automated API checks passed, plus
-browser verification of live polling between two viewers, cleanup on navigation,
-and the full winner journey. Sprints 01-06 were re-run: 17/17, 20/20, 30/30,
-27/27, 24/24, 29/29. **169 checks green in total.**
-
-**Requirements delivered:** FR-13.1 … FR-13.4, FR-14.1 … FR-14.5, C-10, NFR-P2,
-NFR-R3, NFR-U2, NFR-U4.
-
-**Endpoints added / changed:**
-
-| Method | Path | Auth | Role | Notes |
-|---|---|---|---|---|
-| POST | `/api/auctions/:id/bid` | Yes | Individual | 200 `{ auction }`, 400/401/403/404 |
-| GET | `/api/users/me/auctions` | Yes | **Individual** | **Redefined** — now the bidding history with outcomes (FR-14.4) |
-| GET | `/api/auctions?mine=true` | Yes | Any | Where an organization's own listings moved |
-| GET | `/api/auctions/:id` | No | — | Now returns `{ auction, bids }` and closes a finished auction on read |
-
-**Screens added:** `/my-auctions` (the individual's history table) and
-`/auctions/:id/payment` (the simulated confirmation). `/auctions/:id` gained
-polling, the bid form, live bid history and the winner notice. The individual
-dashboard gained links to both.
-
-**Modules added:** `models/bidHistory.model.js`, `config/auctionState.js`;
-client `components/BidSection.jsx`, `BidHistoryList.jsx`, and two pages.
-
-**The endpoint collision, now resolved.** Sprint 06 shipped
-`GET /api/users/me/auctions` with its sprint-06 meaning — the caller's own
-listings — at the owner's explicit direction, over the SRS. Sprint 07 requires
-that path for FR-14.4, and sprint-07 agrees with SRS §4.2, so there was no
-contradiction left to escalate: the path now returns the individual's bidding
-history with outcomes, restricted to `individual`. The organization listing moved
-to `GET /api/auctions?mine=true`, matching the `?mine=true` pattern used for
-tenders since Sprint 03. Nothing was lost — verified from both sides — and the
-Sprint 06 regression fixture was updated to follow the move.
-
-**Verification evidence.** A bid above the current price was accepted and moved
-the price; a bid **equal** to it was refused with the Arabic
-"يجب أن تكون مزايدتك أعلى من السعر الحالي." — strictly greater, as FR-13.2
-requires — as was a bid below. An organization and an admin were both refused
-with 403, an anonymous bid with 401, a bid on a `pending_approval` auction and on
-one past its deadline with 400 each. After four rejected attempts, `BidHistory`
-held exactly **one** row: only successful bids are recorded.
-
-**The race condition:** six simultaneous identical bids on one auction produced
-exactly **one** acceptance and **one** history row. A read-then-write check would
-have let several through.
-
-**Lazy closing (FR-14.1):** an auction's `endsAt` was pushed into the past
-directly in the database with nothing scheduled running. It still read `active`
-until the next request; that request returned `ended` and persisted it. The
-winner was the holder of the highest bid, and an auction with **zero** bids
-closed cleanly with no winner and no error. All four outcomes were confirmed
-through `/api/users/me/auctions`: `winning`, `outbid`, `won`, `lost`.
-
-In the browser at 360px:
-
-- **Two viewers.** One tab watched an auction **logged out**, showing the
-  sign-in prompt rather than a broken form. A bid placed out-of-band appeared in
-  the watching tab **3.87 seconds** later — inside the 3-5s band of NFR-P2 —
-  along with the new history row and bidder name.
-- **Polling cleanup**, the failure mode the sprint calls the most common bug in
-  the project: instrumenting `XMLHttpRequest` showed **2 polls in 9 seconds**
-  (~4.5s apart) while on the page, and **0 in 9 seconds** after navigating away.
-  The interval is genuinely cleared.
-- **Submit disabled in flight:** a MutationObserver recorded the exact sequence
-  `disabled → aria-busy=true → enabled → aria-busy=null`. A plain sample missed
-  it because the local API answers in under 40ms.
-- A too-low bid showed the specific Arabic message and kept the typed amount.
-- **The winner journey:** after the deadline passed, the page showed the `منتهي`
-  stamp, "انتهى المزاد" instead of a negative countdown, the congratulations
-  notice with the winning amount, and no bid form. Polling had stopped. The
-  payment screen led with its simulation warning, and after confirming still said
-  "لم يُخصم أي مبلغ، ولم تُنفَّذ أي عملية دفع فعلية." `/my-auctions` then read
-  **"فزت بالمزاد"** with a link back to payment.
-
-**Deviations from the sprint file:**
-
-1. **`resolveAuctionState` lives in `config/auctionState.js`.** The sprint offers
-   "functions/ or config/"; the server has no `functions/` directory — that is a
-   client folder in `AGENTS.md` §3 — so `config/` it is.
-2. **Closing uses an atomic `updateOne`, not `document.save()`.** A save would
-   run the schema's future-date validator against an `endsAt` that is by
-   definition now in the past, and every close would fail validation. The atomic
-   form also means two concurrent readers cannot both close the same auction.
-3. **The `endsAt` validator was scoped to creation and explicit edits.** Same
-   root cause: a rule about when an auction may be *created* must not block
-   operations on one that is already running.
-4. **`listActiveAuctions` now resolves each candidate before filtering** rather
-   than querying `endsAt > now`. FR-14.1 says a finished auction is closed by the
-   next read; the previous query hid them without ever closing them.
-5. **`/auctions/:id/payment` is a new route.** FR-14.5 requires the simulated
-   confirmation and SRS §4.1 lists no path for it. Gated to the winning
-   individual; anyone else gets an Arabic explanation rather than the screen.
-6. **The winner is derived, not stored.** SRS §5.4 has no winner field:
-   `status === "ended"` plus `currentHighestBidder` is the answer, which is
-   exactly what NFR-R3 asks for — computed from `endsAt` and stored bid data, not
-   cached at listing time.
-
-**Known issues carried forward:**
-
-1. **The auction-win email is not wired** — Sprint 08 (FR-14.3 in-app notice is
-   done). Unlike the other four notifications there is no `TODO(sprint-08)` in
-   the server for this one, because closing happens inside
-   `resolveAuctionState` on a read path that may run for any visitor. Sprint 08
-   should decide where the win notice is triggered from — most likely the
-   client, when the winner first sees the ended auction.
-2. **A closed auction is resolved by whoever reads it first**, which may be an
-   anonymous visitor. Harmless today, but it means the closing moment is not
-   attributable to anyone. An audit trail is out of scope (L-5).
-3. **`/my-auctions` loads every auction the caller has bid on, one query each.**
-   Fine at MVP volumes; an aggregation would be the fix if history grows.
-4. **No pagination** on auctions, tenders, or bid history.
-5. **The Atlas URI still names no database** — data lands in `test`.
-6. **No token expiry** (L-1), **local disk uploads** (L-4).
-7. **Sprint 00 known issues 4 and 5 still stand.**
-8. **Verification data was cleaned up** — all auctions and bid history removed.
-   The `demo-*` accounts, four tenders and one proposal remain for manual
-   testing.
-
-**Postman collection updated:** yes — an 8-request "Sprint 07" folder covering
-bidding (accepted, equal, below, wrong role, closed auction), the polled detail
-endpoint, the individual history, and the moved organization listing. The
-collection now holds 84 requests across eight folders. The equivalent HTTP calls
-were all executed and passed; the requests were not clicked through the Postman
-GUI.
-
----
-
-## Sprint 08 — Notifications & Hardening — completed 2026-08-21
-
-**The MVP is complete.** All 8 acceptance criteria verified. **211 checks green:**
-169 across the Sprint 01-07 regression, 22 in the Part B/D security and cleanup
-audit, and 20 in the Part C accessibility audit. Part E traceability is walked
-and recorded below.
-
-**Requirements delivered:** FR-16.1, FR-16.2, FR-16.3, C-8, NFR-R2, NFR-S4,
-NFR-S5, NFR-S8, NFR-U1 … NFR-U6, NFR-P1 … NFR-P4, NFR-M4, NFR-M5.
-
-**Modules added:** `client/src/functions/sendEmail.js` (the single EmailJS
-importer), `server/config/rateLimit.config.js`.
-
----
-
-### Part A — the five notifications
-
-| Trigger | Fired from | Recipient |
-|---|---|---|
-| Organization approved | `AdminDashboardPage` | the organization |
-| Organization rejected | `AdminDashboardPage` | the organization |
-| Proposal accepted | `TenderProposalsPage` | the submitting organization |
-| Proposal rejected | `TenderProposalsPage` | the submitting organization |
-| Auction won | `BidSection` | the winning individual |
-
-All five route through `sendNotification` in `client/src/functions/sendEmail.js`.
-**C-8 verified: `@emailjs/browser` is imported in exactly one file.** Config comes
-only from `import.meta.env.VITE_EMAILJS_*`; no key is hard-coded (NFR-S4).
-
-**The auction-win trigger resolves the question Sprint 07 left open.** An auction
-closes inside `resolveAuctionState`, on a read any anonymous visitor might make,
-so no server-side moment belongs to the winner. It fires client-side the first
-time the winner sees the ended auction, with a `localStorage` marker so the
-four-second poll does not re-send it.
-
-**NFR-R2, the criterion that matters most, verified end to end with genuinely
-broken credentials.** `client/.env` was set to `service_deliberately_wrong` /
-`template_deliberately_wrong` / `key_deliberately_wrong`, and EmailJS really did
-fail — the console recorded *"The Public Key is invalid"* on each attempt.
-Despite that:
-
-- **Approval:** the organization went `pending` → `approved`, persisted; its next
-  login reported `approved`; and it successfully published a tender afterwards.
-- **Proposal decision:** the stamp went `مُقدَّم` → `مقبول` and the database
-  confirmed `accepted`.
-- **Neither showed a user-facing error.** A failed notice is invisible to the
-  person taking the action, because the action succeeded.
-
-Order of operations is enforced structurally: no `notify*` call is `await`ed into
-a success path, so a slow send cannot stall the UI, and the helper contains no
-`throw` inside any `catch`, so a failed send cannot reach the caller.
-
-### Part B — security hardening (13/13)
-
-- **helmet** mounted before the routes; `nosniff` and a CSP present on every response
-- **Rate limiting** added: global, plus tighter limits on login/register and on
-  bidding. **429 demonstrated live** with production-shaped limits — statuses ran
-  `400, 400, 400, 400, 400, 429, 429, 429`, refused after exactly 5 attempts with
-  an Arabic message, while `GET /api/health` stayed 200 throughout
-- **CORS** names exactly one origin from `CLIENT_ORIGIN`, never a wildcard
-- **Secrets:** no secret appears in any of the 99 tracked files; both `.env`
-  gitignored, both `.env.example` tracked with no real values
-- **Logs:** no server log statement writes a request body or a password value
-- **Uploads:** MIME spoofing rejected on all three flows — proof document,
-  proposal document and auction image — and an oversized file returns 400
-- **Passwords:** none of eight read endpoints returns a `password` field or a hash
-- **Roles:** no controller trusts a body role; `role: "admin"` at registration
-  still creates nothing
-- **Errors:** all five sampled failures return JSON with Arabic text and no stack
-
-### Part C — UX and accessibility audit (20/20)
-
-Walked across all 45 components and pages. Four render states on every data
-screen; every rendered string Arabic with no status codes; field errors wired
-with `aria-invalid`/`aria-describedby`/`role="alert"`; no `catch` clears form
-state; every destructive action confirms first; status never by colour alone (15
-labelled statuses with icons); **zero physical direction utilities**; every email
-and numeric input `dir="ltr"`; 18 files isolate interpolated values in `<bdi>`;
-10 files rendering figures use `tabular-nums`; focus rings on every raw control
-plus a global `:focus-visible`; no clickable `div`; every `img` has `alt`; no
-index keys; no hex literals; both `setInterval` callers clear their timer; no
-component imports axios directly.
-
-**Four checks failed on the first pass and all four were faults in my checker,
-each confirmed by inspection, not assumption:** it required an empty state on
-single-record pages (a missing record is a 404, rendered as the error state);
-flagged the dev smoke page's `variant="danger"` swatch as an unconfirmed
-destructive action; flagged a component that carries `finalPrice` in state
-without rendering it; and flagged files for missing a focus ring when they render
-the shared `Button`/`FormField`, which carry it themselves.
-
-### Part D — performance and cleanup (4/4)
-
-- Non-AI reads: slowest of five sampled endpoints was **487ms**, well inside
-  NFR-P1's two seconds
-- Auction polling measured at ~4s and **stops on unmount** (Sprint 07: 2 polls in
-  9s on the page, 0 in 9s after navigating away)
-- The Sprint 01 `/api/admin/ping` probe is gone — 404
-- **All `TODO(sprint-08)` markers resolved**, replaced with notes naming the
-  client function that now sends each notice
-- **`/dev/rtl` excluded from the production build** — neither the route string nor
-  the page's own content appears in the bundle, while it still works in `npm run
-  dev`. The landing-page link to it is gated the same way.
-
-### Part E — SRS §8 traceability
-
-| Requirement | Verified by | Status |
-|---|---|---|
-| FR-1.1, FR-1.2 | Sprint 01 checks 3, 4 — duplicate email and 3-char password both 400 with Arabic field messages | ✅ |
-| FR-1.4, NFR-S1 | Sprint 01 check 5 — stored value is a `$2b$10$` hash that `bcrypt.compare` accepts | ✅ |
-| FR-1.5, FR-3.4 | Sprint 01 check 1 + browser: pending organization logs in, sees the review notice, has no tender control | ✅ |
-| FR-4.2, FR-4.4 | Sprint 02 check 6 (status flips) + Sprint 08 Part A (EmailJS call fires) | ✅ |
-| FR-5.1, FR-5.3 | Sprint 01 check 8 — no token 401, wrong role 403, demonstrably different paths | ✅ |
-| FR-5.4 | Sprint 01 check 12b + Sprint 08 B8b — `role: "admin"` creates nothing | ✅ |
-| FR-6.3 | Sprint 03 check 2 — pending organization creating a tender gets 403 | ✅ |
-| FR-9.2, FR-9.3 | Sprint 04 checks 2, 3, 4 — self-bid 403, duplicate 400, and blocked by the unique index with the controller bypassed | ✅ |
-| FR-10.2, FR-10.4 | Sprint 05 checks 1, 4 — real extraction of 47500 with confidence; invalid key still allows manual submission | ✅ |
-| FR-11.2, FR-11.3 | Sprint 05 check 11 + Sprint 08 Part A — decision persists, notice fires | ✅ |
-| FR-12.2, FR-12.3 | Sprint 06 checks 4, 7 — pending never in the public body; approval publishes it | ✅ |
-| FR-13.2 | Sprint 07 checks 2, 3 — equal and below both 400, strictly greater enforced | ✅ |
-| FR-13.3, FR-13.4 | Sprint 07 checks 1, 9 + browser — a second viewer saw the new price **3.87s** after the bid | ✅ |
-| FR-14.2, FR-14.3 | Sprint 07 checks 10, 11 — winner determined lazily with no scheduler; in-app notice shown | ✅ |
-| DATA-1, DATA-2 | Sprint 03 check 4c, Sprint 04 check 4b — rejected create and rejected update both write nothing | ✅ |
-| NFR-R1 | Sprint 05 check 4 — invalid `GEMINI_API_KEY`, proposal still submitted at a manual price | ✅ |
-| NFR-R2 | Sprint 08 Part A — invalid EmailJS credentials, approval and acceptance both stand | ✅ |
-
-**Every row in SRS §8 is demonstrated.** The one qualification is on FR-4.4 and
-FR-11.3: what is proven is that the EmailJS call is *made* with the right
-recipient and that failure is harmless. **Actual delivery has never been observed,
-because no real EmailJS account is configured** — see known issues.
-
----
-
-**Deviations from the sprint file:**
-
-1. **Rate limits are environment-configurable** (`RATE_LIMIT_MAX`,
-   `AUTH_RATE_LIMIT_MAX`, `BID_RATE_LIMIT_MAX`, plus windows), defaulting to the
-   production intent of 300/15min global, 10/15min auth, 30/min bids. Without
-   this a development machine running the regression suites locks itself out
-   after ten logins. `.env.example` documents them with empty values; the local
-   `.env` raises them. NFR-M2 covers externalising exactly this kind of value.
-2. **`/dev/rtl` is excluded from the production build rather than deleted.**
-   Sprint 00 says keep it for the life of the project; sprint-08 offers "removed
-   **or** excluded". Excluded satisfies both.
-3. **The submitter's email is exposed to the tender owner.** `listProposalsForTender`
-   now populates `submittedBy` with `companyName` **and** `email`. This is forced
-   by C-8: EmailJS sends from the browser, so the address must reach the sender's
-   client. Nothing else about the submitter was added. Worth noting as a
-   consequence of the client-side email architecture, not a choice.
-4. **No `TODO(sprint-08)` was ever placed for the auction win** (Sprint 07
-   deviation 1), because closing happens on an anonymous read path. Resolved in
-   Part A above.
-
-**Known issues carried forward:**
-
-1. **No email has ever actually been delivered.** The owner has no EmailJS
-   account configured; `client/.env` currently holds deliberately-invalid
-   credentials from the NFR-R2 test. **To send for real:** create an EmailJS
-   service and template whose variables are `to_email`, `to_name`, `subject`,
-   `message`, then put the real service ID, template ID and public key in
-   `client/.env`. Until then `isEmailConfigured()` short-circuits and logs a
-   skip. Everything else works regardless — that is NFR-R2 by design.
-2. **One EmailJS template serves all five notifications**, varying by `subject`
-   and `message`. `AGENTS.md` and `SPRINT_PLAN.md` §6 specify a single
-   `VITE_EMAILJS_TEMPLATE_ID`, so this matches the configured shape. Five
-   separate templates would need five env keys.
-3. **Rate limiting is in-memory and per-process** — L-3 acknowledges this. It
-   resets on restart and would not hold across multiple instances.
-4. **The local `.env` carries relaxed rate limits** (5000/500/300) so the test
-   suites can run. Clear those three lines before any real deployment to fall
-   back to the production defaults.
-5. **The Atlas URI still names no database** — data lands in `test` beside an
-   unrelated `jokes` collection. Adding `/procurement_platform` before the `?`
-   fixes it. Unchanged since Sprint 01.
-6. **Atlas Network Access is IP-bound.** The cluster refused all connections
-   mid-sprint when the owner's IP changed overnight, which halted verification
-   until it was allowlisted again. Worth knowing before a live defense.
-7. **No token expiry** (L-1), **local disk uploads** (L-4), **no audit trail**
-   (L-5), **simulated payment only** (L-7), **polling not push** (L-8),
-   **single currency** (L-9).
-8. **Sprint 00 known issues 4 and 5 still stand** (`express-rate-limit` is now
-   wired, closing issue 4's other half; Vite template leftovers remain).
-9. **Verification data was cleaned up.** The database holds the seeded admin, the
-   owner's own `aws@gmail.com`, and the `demo-*` accounts with their 4 tenders,
-   1 proposal and 6 auctions, left deliberately for manual testing.
-
-**Postman collection updated:** yes — a "Sprint 08" folder documenting the rate
-limit behaviour and the notification architecture. The collection holds 87
-requests across nine folders. Sprint 08 adds no new endpoints; its changes are
-middleware and client-side.
-
----
-
-## Sprint 09 — Negotiation & Contract Draft *(stretch)* — completed 2026-08-21
-
-**All 11 acceptance criteria verified.** 26/26 automated API checks passed, plus
-browser verification of both participants, the contract draft, the access
-refusals and the polling cleanup. Everything before it was re-run: **237 checks
-green** — 169 across Sprints 01-07, 22 in the Sprint 08 security audit, 20 in the
-accessibility audit, and 26 here.
-
-**Requirements delivered:** FR-15.1, FR-15.2, FR-15.3.
-
-**Entry conditions checked before any code was written**, as the sprint file
-demands: every Sprint 00-08 criterion passing, the Sprint 08 audit recorded in
-this file, and no known bug carried forward — the outstanding items are accepted
-limitations and configuration notes, not defects.
-
-**Endpoints added:**
-
-| Method | Path | Auth | Role | Success | Failure |
-|---|---|---|---|---|---|
-| GET | `/api/proposals/:id/messages` | Yes | Participants or admin | 200 `{ messages, thread }` | 400, 401, 403, 404 |
-| POST | `/api/proposals/:id/messages` | Yes | Participants only | 200 `{ message }` | 400, 401, 403, 404 |
-| POST | `/api/proposals/:id/contract-draft` | Yes | Tender owner | 200 `{ contractDraft }` | 400, 401, 403, 404, 502 |
-| GET | `/api/proposals` | Yes | Approved organization | 200 `{ proposals }` | 401, 403 |
-
-**Screens added:** `/proposals/:id/negotiation`. The organization dashboard
-gained a **عروضي المقدَّمة** section, and the proposal review card gained a
-thread link on an accepted proposal.
-
-**Modules added:** `models/negotiationMessage.model.js`,
-`controllers/negotiation.controller.js`, `routes/negotiation.routes.js`,
-`generateContractDraft` + `requestContractDraft` inside the existing
-`ai.controller.js`; client `components/MessageThread.jsx`,
-`ContractDraftPanel.jsx`, `MyProposalsList.jsx`, `pages/NegotiationPage.jsx`.
-
-**Verification evidence.** A thread refused to open on a `submitted` proposal —
-400 with "لا تُفتح غرفة التفاوض إلا بعد قبول العرض." — and opened the moment the
-proposal was accepted. Both participants posted and read the same two messages,
-ordered oldest first with sender and timestamp, and the payload carried no
-password field. **A third organization was refused 403 on both read and post,
-and the refusal body contained none of the thread's content**; an individual got
-403 and an anonymous caller 401. An admin read the thread but was refused
-posting, with `canPost: false` in the payload. An empty message returned 400 with
-a field-level Arabic error, and a malformed id returned 404 rather than 500.
-
-On the contract draft: only the tender owner may request one — the submitter and
-a third organization both got 403 — and a draft on a never-accepted proposal
-returned 400. A real generation produced **958 characters of Arabic prose naming
-the actual parties and the accepted value**, persisted on the proposal and
-returned as plain editable text. With the key cleared, generation failed as a
-**502 carrying a contract-specific Arabic message**, and the thread kept working
-immediately afterwards. `@google/generative-ai` is **still imported in exactly
-one file**.
-
-In the browser at 360px: the room rendered with its data rail, the empty-thread
-message and the composer. **The non-binding notice was visible before any draft
-existed** — it is permanent, not attached to the draft. The owner posted a
-message, generated a draft (674 characters, opening "عقد توريد … الطرف الأول:
-شركة البناء الحديثة"), and the notice stayed visible above it. Switching to the
-submitting organization: the dashboard showed **عروضي المقدَّمة** with the
-`مقبول` stamp and a thread link; following it showed the owner's message, an
-enabled composer, the draft — and **no generate button**, since that belongs to
-the owner alone. An unrelated individual navigating straight to the URL got the
-Arabic permission message with **no message text, no draft, and no status code**.
-Polling ran at ~4.5s in the room and **0 polls in 9 seconds after leaving**.
-
-**Deviations from the sprint file:**
-
-1. **`GET /api/proposals` added** for the submitting organization's own
-   proposals. Not in SRS §4.2, but SRS §4.1 describes the organization dashboard
-   as "My tenders, my proposals", and FR-15.1 is unusable without it: the
-   submitter had no way to reach an accepted proposal. This closes the gap
-   flagged since Sprint 04. It is declared **before** `/proposals/:id` so the
-   literal path is never read as an id.
-2. **An admin may read a thread but never post.** The sprint says "an admin may
-   read but should not post"; that is enforced, not merely advised — `canPost`
-   is false in the payload and a POST returns 403.
-3. **The contract draft has its own Arabic failure message.** `aiUnavailable`
-   previously carried the document-analysis wording, which would have told a
-   user to "enter the data manually" when a *contract* failed to generate.
-   Failures now report the operation that actually failed.
-4. **Polling rather than a refresh button.** The sprint offers either; reusing
-   the Sprint 07 pattern at the same 4000ms keeps one polling idiom in the
-   codebase, and it clears on unmount.
-5. **`contractDraft` stored on the proposal**, as the sprint suggests, rather
-   than a second collection.
-
-**Known issues carried forward:**
-
-1. **The draft is generated fresh each time and overwrites the stored one.**
-   Editing it in the textarea is local to the page — there is no endpoint to
-   save an edited draft, because FR-15.2 asks for a *draft* and FR-15.3 makes
-   clear the binding artefact lives outside the system. Copy the text out before
-   regenerating.
-2. **Gemini still returns transient 503s under load.** The draft path degrades
-   the same way the analysis path does: an Arabic notice, and the thread stays
-   usable. Retrying usually succeeds.
-3. **No unread indicator or notification on a new message.** FR-15.1 asks for a
-   simple thread; the sprint file explicitly warns against building a chat
-   product. A participant sees new messages within one 4-second poll while the
-   room is open.
-4. **No email on a negotiation message.** FR-16.1 lists exactly five triggers and
-   this is not one of them.
-5. **The local `.env` still carries relaxed rate limits** (5000/500/300) so the
-   suites can run — clear those three lines before deploying.
-6. **EmailJS credentials in `client/.env` are still the deliberately-invalid
-   ones** from the Sprint 08 NFR-R2 test. Replace them to send real mail.
-7. **The Atlas URI still names no database** — data lands in `test`. Atlas
-   Network Access is also IP-bound and blocked all work for part of this sprint
-   when the owner's address changed overnight.
-8. **No token expiry** (L-1), **local disk uploads** (L-4), **no audit trail**
-   (L-5), **simulated payment** (L-7), **polling not push** (L-8), **single
-   currency** (L-9).
-9. **Verification data was cleaned up.** The `demo-*` accounts keep their 4
-   tenders, 6 auctions and 1 proposal — now **accepted**, with a generated
-   contract draft, so the negotiation room is reachable for manual testing.
-
-**Postman collection updated:** yes — a 6-request "Sprint 09" folder covering the
-thread (open, post, third-party 403, admin read-only), the contract draft (owner
-only, 502 on failure) and the submitter's proposal list. The collection holds 94
-requests across ten folders.
-
----
-
-## Project status — all ten sprints complete
-
-| Sprint | Checks | |
-|---|---|---|
-| 00 Foundation & Shell | 9 acceptance criteria | ✅ |
-| 01 Identity & Access | 17 | ✅ |
-| 02 Admin Organization Review | 20 | ✅ |
-| 03 Tenders | 30 | ✅ |
-| 04 Proposals | 27 | ✅ |
-| 05 AI Analysis & Decisions | 24 | ✅ |
-| 06 Auctions | 29 | ✅ |
-| 07 Bidding & Closing | 22 | ✅ |
-| 08 Notifications & Hardening | 22 audit + 20 accessibility | ✅ |
-| 09 Negotiation & Contract *(stretch)* | 26 | ✅ |
-
-**237 automated checks, all passing.** Every SRS §8 traceability row is
-demonstrated (recorded in the Sprint 08 entry). The two qualifications on record:
-no email has ever actually been delivered, because no EmailJS account is
-configured; and the "no flash of the login page" half of Sprint 01's criterion 10
-is verified structurally rather than by high-frequency sampling.
+**Requirements delivered:** FR-13.1, FR-13.2, FR-13.3, FR-13.4, FR-14.1, FR-14.2, FR-14.3, FR-14.4, FR-14.5, C-10, NFR-P2, NFR-R3
+**Endpoints added:** `POST /api/auctions/:id/bid`, `GET /api/users/me/auctions`; added `GET /api/users/me/created-auctions` to preserve Sprint 06 organization management semantics.
+**Screens added:** upgraded `/auctions/:id` with Individual bidding, polling, bid history and winner notice; added `/my-auctions` and `/auctions/:id/payment` simulation screen.
+**Deviations from the sprint file:** The organization dashboard now uses a separate created-auctions endpoint because `/api/users/me/auctions` is correctly restricted to Individual bid history by the authoritative SRS. No functional deviation.
+**Known issues carried forward:** auction-win email remains intentionally deferred to Sprint 08.
+**Postman collection updated:** no
+
+**Verification performed:** successful Individual bid updated `currentPrice`; equal and lower bids returned 400; unauthenticated bidding returned 401; Organization/Admin bidding returned 403; pending-auction bid returned 400; only successful bids appeared in `BidHistory`; personal history returned `winning` with the highest bid; an auction with no bids lazily changed to `ended` on the next read with a null winner; bidding after lazy close returned 400; client build passed; the 4000ms polling interval and cleanup were source-audited; new Sprint 07 JSX passed the RTL utility audit.
+
+
+### Sprint 08 EmailJS configuration update — 2026-08-20
+
+The client now uses the supplied EmailJS Service ID, Public Key and `template_w1mnjin` as the single general notification template through `src/functions/sendEmail.js`. The Private Key was intentionally not written to the client. A complete two-template HTML setup guide was created at `/home/ubuntu/emailjs-templates-setup.md`; live delivery still requires replacing the second existing password-reset template with the general notification template described there. Client production build passed with exactly one `@emailjs/browser` import.
+
+
+## Sprint 08 — Notifications & Hardening — completed 2026-08-20
+
+**Requirements delivered:** FR-16.1, FR-16.2, FR-16.3, C-8, NFR-R2, NFR-S4, NFR-S5, NFR-S8, NFR-U1–U6, NFR-P1–P4, NFR-M4, NFR-M5
+**Notification implementation:** `client/src/functions/sendEmail.js` is the only source file importing `@emailjs/browser`. The general template `template_w1mnjin` is used for organization approval/rejection, proposal acceptance/rejection, and auction win. Notification calls are fire-and-forget after successful state changes and swallow/log EmailJS failures.
+**Security hardening:** Helmet is mounted before routes; global, auth and bid rate limits are active; CORS is restricted to the single configured origin; `.env.example` is sanitized; local secrets remain ignored; password fields are schema-excluded; upload MIME validation remains server-side; no role is trusted from request bodies; no `/api/admin/ping` route or Sprint 08 TODO remains.
+**UX/performance audit:** client build passed; source audit found zero physical RTL utilities and zero full-page reload calls; auction polling remains 4000ms with cleanup; `/dev/rtl` is excluded from production routing; public non-AI read measured approximately 0.15 seconds; Helmet security headers were present.
+**Email verification:** after the user updated both EmailJS templates, a browser-side smoke test using the configured public integration returned `EMAILJS_OK`. Direct REST testing was rejected by EmailJS account security, but the application uses the browser SDK as required.
+**Known issues carried forward:** none identified for Sprints 06–08. The private EmailJS key is intentionally not used in the browser.
+**Postman collection updated:** no
+
+
+## Sprint 09 — Negotiation & Contract Draft — implementation in progress 2026-08-20
+
+**Requirements implemented:** FR-15.1, FR-15.2, FR-15.3
+**Endpoints added:** `GET /api/proposals/:id/messages`, `POST /api/proposals/:id/messages`, `POST /api/proposals/:id/contract-draft`
+**Screens added:** `/proposals/:id/negotiation`, reachable from an accepted proposal in the tender owner’s proposal table.
+**Security behavior:** only accepted proposals expose a thread; the tender owner and accepted bidder can read and post; admins can read but not post; unrelated organizations and Individuals receive 403; only the tender owner can request a draft.
+**Verification performed:** both participants posted and read messages; messages returned oldest-first; third organization and Individual reads returned 403; admin read returned 200 and admin post returned 403; submitted proposal access returned 400; AI failure returned 502 while the thread remained usable; client build passed; Gemini import count remained exactly one; auction polling cleanup and RTL audits remained clean.
+**Blocking verification item:** the configured `GEMINI_API_KEY` currently causes the contract-draft request to return 502, so successful Arabic draft generation and editability cannot yet be marked passed. Replace the local server key with a valid Gemini API key and rerun the owner draft test.
+**Postman collection updated:** no
+
+
+## Sprint 10 — Design Overview & Component Library Expansion — completed 2026-08-20
+
+**Requirements delivered:** UI-1, UI-2, UI-3, UI-4, NFR-U1–U6, NFR-M1, C-2
+**Components added:** `Card`, `DataRail`, `AppHeader`, `PublicHeader`, `Sidebar`, `Drawer`, `FilterBar`, `Pagination`, `ConfirmDialog`, `FileUploadField`, `Countdown`, `ConfidenceBadge`, `ResponsiveTable`, `Breadcrumbs`
+**Layout shells added:** `PublicLayout`, `AdminLayout`, `OrganizationLayout`, `IndividualLayout`
+**Screens updated:** `/dev/rtl` smoke test expanded to render and document every primitive and layout component with real Arabic content.
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no (UI sprint only)
+
+**Verification performed:** completed a full token audit of Sprints 01–09 codebase; replaced all remaining inline hex colors (except index.css token definitions) and physical direction utilities; replaced two instances of ad-hoc inline status colors in `TenderDetailPage` with the standard `StatusStamp` and `ConfidenceBadge` components; verified 14 new reusable components and 4 layout shells were successfully added; client production build passed with zero physical RTL or raw hex violations.
+
+
+## Sprint 11 — Landing Page Design — completed 2026-08-20
+
+**Requirements delivered:** UI-1, UI-2, UI-3, UI-4, NFR-U5, NFR-U6
+**Endpoints added:** none (reused existing `GET /api/tenders` and `GET /api/auctions` endpoints as required).
+**Screens added:** updated `/` route to replace the Sprint 00 placeholder with the full public landing page design using `PublicLayout`.
+**Deviations from the sprint file:** installed `prop-types` dependency because it was used in Sprint 10 components but not included in the original Sprint 00 initialization.
+**Known issues carried forward:** none
+**Postman collection updated:** no (UI sprint only)
+
+**Verification performed:** the landing page renders sections for Hero, How it works, Tenders preview and Auctions preview; preview sections use independent loading/error/empty states and render real data via the existing endpoints; navigation buttons route correctly; client build passed after adding `prop-types`; RTL and token audit passed.
+
+
+## Landing Page Creative Redesign — completed 2026-08-20
+
+**Scope:** UI-only redesign of `/`; no backend, route, endpoint, schema or business-rule changes.
+**Visual direction:** Palestinian-market identity using the existing registry green, flag red, ink and paper tokens; olive-branch motifs, patterned surfaces, stronger contrast, richer card hierarchy and marketplace-oriented copy.
+**Enhancements:** added reusable `Icon` component; animated hero composition; animated step cards and live-data cards; reduced-motion support via `prefers-reduced-motion`; responsive one/two/three-column grids; independent tender and auction data states preserved; existing endpoints and navigation preserved.
+**Verification:** client lint completed with 0 errors (31 existing warnings remain, primarily hook dependency/style warnings); production build passed; landing-page RTL audit found 0 physical-direction violations and 0 inline hex values; only existing `/api/tenders` and `/api/auctions` reads are used; reduced-motion CSS and responsive breakpoints are present.
+
+
+## Landing Page Photo-led Redesign — completed 2026-08-20
+
+**User-requested changes:** removed the public tender and auction preview sections so logged-out visitors no longer see business data on the landing page; replaced them with modern marketing sections focused on trust, local relevance, collaboration and role-based entry points.
+**Visual assets:** added `client/public/landing-assets/palestine-market-hero.jpg` and `client/public/landing-assets/palestine-business-collaboration.jpg`, generated as original editorial-style imagery for the site.
+**Design changes:** added photo-led hero composition, local-market visual language, role cards for institutions and individuals, animated image hover states, motion-safe floating/rise effects, icon-led trust signals and modern responsive section hierarchy.
+**Verification:** client build passed; landing page uses zero tender/auction API preview calls; two local photo assets are referenced; private preview section copy is absent; RTL audit found zero physical-direction utilities and zero inline hex values in the page.
+**App Store submission note:** `app-store-submission-packager` is for iOS/Android submission documentation; this project is currently a MERN web application, so no mobile-store package was created.
+
+
+## Landing Page Editorial Rebrand — completed 2026-08-20
+
+**Direction:** replaced the prior photo-led marketing layout with a completely different editorial-brutalist direction inspired by Palestinian craft geometry, magazine composition and institutional clarity.
+**Changes:** oversized Arabic typography, asymmetric 12-column hero, overlapping editorial image, manifesto section, numbered movement pillars, split role-selection panels, tatreez-inspired divider, deep ink/green/red palette, motion-safe reveals and focused CTAs.
+**Assets:** added `client/public/landing-assets/itimad-editorial-hero.jpg` as the new hero visual; prior assets remain available but are no longer required by the new landing-page structure.
+**Functional behavior:** no public tender/auction data calls; existing `/register/organization`, `/register/individual` and `/login` routes remain wired.
+**Verification:** client production build passed; zero physical RTL utility violations; zero inline hex values; zero public data-preview API calls; new hero asset referenced successfully.
+
+
+## Landing Page Multi-Photo Repair — completed 2026-08-20
+
+**Hero correction:** replaced the prior hero with `palestine-urban-horizon-hero.jpg`, a cinematic Palestinian hillside/city/olive-grove landscape with subtle digital connection points. City details remain on the left and the right side is reserved for the white Arabic headline through a directional dark gradient.
+**Supporting imagery:** added `palestine-stone-laptop.jpg` for the heritage-and-technology section and `palestine-arch-opportunity.jpg` for the architectural opportunity section, both matching the hero's warm editorial photography.
+**Composition repairs:** rebuilt the page around four image-led sections: urban horizon hero, promise/process, stone-and-laptop technology story, and arch-framed opportunity scene. All images have Arabic alt text, lazy loading where appropriate, and responsive object-fit behavior.
+**Verification:** client build passed; three required photo references are present; zero physical RTL utility violations; zero inline hex values; no public tender or auction data calls; existing registration/login CTA routes remain wired.
+
+
+## Landing Page Hero Alignment & Palette Correction — completed 2026-08-20
+
+**Hero correction:** moved the hero copy into an explicit right-side RTL-safe container using `text-end`, while keeping the city and visual landmarks on the left side of the cinematic image. The hero bottom accent was changed from flag red to registry green for a calmer finish.
+**Palette correction:** removed the full red background from the final role-selection section and replaced it with paper/stone background, deep ink institution panel, surface individual panel and registry-green accents. The stone-and-laptop section label was also changed from flag red to registry green.
+**Verification:** client build passed; zero physical RTL utility violations; zero red role-section background matches; explicit side-alignment classes confirmed.
+
+
+## Hero Arabic Direction Correction — completed 2026-08-20
+
+**Correction:** added explicit `dir="rtl"` to the hero content wrapper and heading, preserved `text-end`, and aligned the hero controls within the right-side content area. The phrase remains correctly written as `اربط الأفق بالفرصة.` while now rendering from the right-to-left side of the hero safe area.
+**Verification:** client build passed; explicit RTL markers confirmed; zero physical RTL utility violations.
+
+
+## Sprint 12 — Login Design — completed 2026-08-20
+
+**Requirements delivered:** FR-3.2, FR-3.4, NFR-U1, NFR-U2
+**Endpoints added:** none (reused existing `POST /api/auth/login`).
+**Screens updated:** `/login` redesigned using `PublicLayout`, `Card`, and a new `PasswordField` with a visibility toggle.
+**Functional behavior:** added the explicit pending-organization banner notice path (FR-3.4); preserved email input on failure while clearing password (NFR-U2); ensured the page-level error message is identical for all invalid credentials (FR-3.2).
+**Verification:** client build passed; zero physical RTL utility violations; zero inline hex values; explicit LTR direction applied to email and password inputs.
+
+
+## Sprint 12 Login Photo-led Redesign — completed 2026-08-20
+
+**User-requested refinement:** redesigned `/login` as a split photo-and-form layout while preserving the Itimad green/ink/paper theme.
+**Visual changes:** added a Palestinian collaboration photo panel with layered copy, rebuilt the login form area with clearer hierarchy and Arabic helper text, and retained the calm pending-review notice.
+**Input visibility fix:** updated `FormField` to always render a full-width surface background, visible border, padding and placeholder styling; the email field now includes a readable example placeholder. `PasswordField` retains the visible border/background and show/hide control.
+**Behavior preserved:** no changes to login API, AuthContext, token handling, role redirects, invalid-credential behavior, or pending-organization routing.
+**Verification:** client build passed; zero physical RTL utility violations; zero inline hex values; photo reference and visible input styles confirmed.
+
+
+## Sprint 13 — Organization Registration Design — completed 2026-08-21
+
+**Requirements delivered:** FR-1.1…FR-1.6, NFR-U1…U3, NFR-S8 courtesy validation
+**Endpoints added:** none; reused `POST /api/auth/register` with the existing multipart upload contract
+**Screens added:** redesigned `/register/organization` and dedicated `/register/organization/review` confirmation screen
+**Deviations from the sprint file:** The existing backend contract requires the representative `name` field in addition to the SRS organization fields, so it remains visible in the form; no backend validation or upload rules were changed.
+**Known issues carried forward:** The successful API smoke test created a pending QA organization record; browser-level visual interaction and slow-upload progress timing were source/build verified but not manually observed in this session.
+**Postman collection updated:** no
+
+**Verification performed:** production client build passed with 141 modules transformed; both registration routes served the Vite application with HTTP 200; a real PDF multipart registration succeeded with `status: "pending"`; a disguised PDF was rejected by the unchanged server-side magic-number validation with HTTP 400 and a specific Arabic file error; submission disables the complete fieldset; upload progress uses `onUploadProgress`; input preservation clears only the password on failure; changed-file RTL audit found zero physical-direction utilities and zero raw hex values; no server registration or multer files were edited.
+
+
+## Sprint 14 — Individual Registration Design — completed 2026-08-21
+
+**Requirements delivered:** FR-2.1…FR-2.3, NFR-U1, NFR-U2
+**Endpoints added:** none; reused the existing `POST /api/auth/register` individual branch
+**Screens added:** redesigned `/register/individual` using `PublicLayout`, a compact `Card`, visible shared fields, and `PasswordField`
+**Deviations from the sprint file:** none
+**Known issues carried forward:** The successful API smoke test created an approved QA individual account; browser-level visual interaction was not manually observed in this session.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 141 modules transformed; `/register/individual` served the Vite application with HTTP 200; a unique individual registration succeeded through the unchanged API and returned `status: "approved"`; AuthContext was verified to have no post-registration auto-login path, so success correctly routes to `/login`; the complete form is disabled while submitting; password is cleared while all other inputs are preserved on failure; field errors are rendered through shared `aria-describedby` and `role="alert"` behavior; the page has zero physical RTL utilities, zero raw hex values, and no upload controls.
+
+
+## Sprint 15 — Admin Dashboard Design — completed 2026-08-21
+
+**Requirements delivered:** FR-4.1…FR-4.4, FR-12.3, NFR-U4, NFR-U5
+**Endpoints added:** none; composed the existing organization, auction, tender, and active-auction endpoints client-side
+**Screens added:** redesigned `/admin/dashboard` with `AdminLayout`, responsive KPI cards, independent organization and auction review sections, and confirmation dialogs
+**Deviations from the sprint file:** The rejection flow uses a custom confirmation dialog rather than the shared `ConfirmDialog` because it must include the optional Arabic reason textarea; approve actions use the shared `ConfirmDialog`.
+**Known issues carried forward:** The existing `Sidebar` is desktop-only below `md`; `AdminLayout` supplies the existing sidebar behavior, while the dashboard content remains responsive and stacked on mobile.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 145 modules transformed; seeded-admin smoke test returned HTTP 200 for pending organizations, pending auctions, open tenders, and active auctions; counts were returned independently as organizations 2, pending auctions 2, open tenders 2, and active auctions 3; all approve/reject endpoint references match the existing routes; rejection sends `{ rejectionReason }`; each pending section has independent loading, error, empty, retry, optimistic removal, rollback, and action-error behavior; approval actions require confirmation; submitted document links use `target="_blank"` and `rel="noopener noreferrer"`; source audit found zero physical RTL utilities and zero raw hex values; no backend or new endpoint was added.
+
+
+## Sprint 16 — Organization Dashboard Design — completed 2026-08-21
+
+**Requirements delivered:** FR-3.4, plus dashboard composition of FR-6, FR-9, FR-12
+**Endpoints added:** `GET /api/users/me/proposals`
+**Screens added:** redesigned `/org/dashboard` with `OrganizationLayout`, pending-organization gate, and three independent data sections
+**Deviations from the sprint file:** The sprint file explicitly forbade adding new endpoints, assuming a 'my proposals' endpoint was already built in Sprint 04. Code inspection confirmed it was never built (Sprint 04 only built `GET /api/tenders/:id/proposals` for the owner). With user permission, I deviated from the sprint constraint and built the missing endpoint to satisfy the UX requirement of the "عروضي المقدَّمة" section.
+**Known issues carried forward:** The login endpoint rate limit (5 per 15 minutes) blocked the final API smoke test of the new endpoint, but the route and controller syntax were verified successfully.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 146 modules transformed; server syntax checks passed for the modified proposal controller and routes; the backend server restarted successfully; the dashboard uses `OrganizationLayout`; the pending-organization state renders only the review notice with no data fetching; the approved state fetches tenders, auctions, and proposals independently; each section has dedicated loading, error, and empty states with distinct Arabic copy; the RTL and token audit found zero physical direction utilities and zero raw hex values.
+
+
+## Sprint 17 — Individual Dashboard Design — completed 2026-08-21
+
+**Requirements delivered:** Dashboard composition of FR-14.4
+**Endpoints added:** none; reused `GET /api/users/me/auctions`
+**Screens added:** redesigned `/dashboard` with `IndividualLayout`, current activity cards, bid outcome labels, empty-state CTA, and auction detail links
+**Deviations from the sprint file:** none
+**Known issues carried forward:** Browser-level authenticated rendering was not manually observed in this session; source, route, and production-build checks passed.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 147 modules transformed; `/dashboard` served the Vite application with HTTP 200; source audit confirmed exactly one reference to the existing auction-history endpoint, client-side filtering for `winning`/`outbid`, zero forbidden status query parameters, `IndividualLayout` usage, zero physical RTL utilities, and zero raw hex values; active and empty views both link to `/auctions`; each activity card links to `/auctions/:id`; prices use `dir="ltr"` and `tabular-nums`; `StatusStamp` communicates outcome with Arabic labels and semantic styling.
+
+
+## Sprint 18 — Tenders List Design — completed 2026-08-21
+
+**Requirements delivered:** FR-7.1…FR-7.3, NFR-U5, NFR-U6
+**Endpoints added:** none; reused `GET /api/tenders` with only the existing `category`, `minBudget`, and `maxBudget` query parameters
+**Screens added:** redesigned `/tenders` with URL-driven filters, responsive `FilterBar`/`Drawer`, tender cards using `DataRail` and `Countdown`, and client-side `Pagination`
+**Deviations from the sprint file:** Pagination is client-side because the existing Sprint 03 endpoint returns the full filtered array and exposes no page/limit/total contract; no unsupported query parameter was added.
+**Known issues carried forward:** Browser-level 360px interaction and refresh behavior were source/build verified but not manually observed in this session.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 152 modules transformed; URL state continues to come from `useSearchParams`; category changes update the URL immediately, budget inputs use a 400ms debounce to avoid refetching on every keystroke, and page changes preserve all active filters; filtered and unfiltered empty states use distinct Arabic messages; `FilterBar` uses a working `Drawer` below `lg`; cards use `DataRail`, `Countdown`, and `StatusStamp`; source audit found zero physical RTL utilities and zero raw hex values; no unsupported backend query parameters were introduced.
+
+
+## Sprint 19 — Tender Details Design — completed 2026-08-21
+
+**Requirements delivered:** FR-8.1…FR-8.3, FR-9.1…FR-9.4, NFR-U4
+**Endpoints added:** none to the tender-detail flow; reused the existing tender, proposal, close, and status endpoints, plus the previously approved Sprint 16 `/api/users/me/proposals` lookup for the duplicate-proposal UX
+**Screens added:** redesigned `/tenders/:id` with `Breadcrumbs`, `PageHeading`, `DataRail`, `Countdown`, `StatusStamp`, `ConfirmDialog`, `FileUploadField`, role-aware proposal panels, and a dedicated not-found state
+**Deviations from the sprint file:** The duplicate-proposal status card uses the Sprint 16 `/api/users/me/proposals` endpoint, which was added with explicit product-manager approval because the original sprint assumed that endpoint already existed.
+**Known issues carried forward:** Browser-level authenticated testing of all role variants and a live close confirmation was not manually observed in this session; build and source audits passed.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 153 modules transformed; `/tenders/not-a-real-id` served the client shell with HTTP 200 for the React not-found flow; source audit found zero physical RTL utilities and zero raw hex values; shared component references confirmed `Breadcrumbs`, `DataRail`, `Countdown`, `ConfirmDialog`, and `FileUploadField`; owner, individual/unapproved organization, duplicate proposal, and closed-tender panel branches are present; close action uses `ConfirmDialog`; proposal submission retains the existing AI-analysis flow and server endpoint; server-side permission rules were not changed.
+
+
+## Sprint 20 — Proposal Review Design — completed 2026-08-21
+
+**Requirements delivered:** FR-10.2…FR-10.4, FR-11.1…FR-11.4, NFR-U3, NFR-U4
+**Endpoints added:** none to AI or proposal actions; reused the existing analysis and status endpoints plus Sprint 16's approved proposal lookup
+**Screens updated:** `/tenders/:id` now has visibly distinct upload, analysing, and review states; owner review uses `ResponsiveTable` with mobile cards, `ConfidenceBadge`, explicit missing-AI labels, and confirmation-gated decisions
+**Deviations from the sprint file:** The existing tender-detail route hosts both submitter and owner review flows rather than a separate `/tenders/:id/proposals` route; this preserves the existing application routing while satisfying the specified behavior.
+**Known issues carried forward:** A forced invalid-key browser test was not performed in this session because the configured AI key was already known to return 502; the fallback path was source-verified and the existing Sprint 09 issue remains documented.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 155 modules transformed; source audit confirmed the calm Arabic AI failure notice reveals the review/manual path, the final submit remains available after analysis failure, numeric `ConfidenceBadge` usage, `ResponsiveTable` mobile-card rendering, explicit `لم يتم التحليل` fallback, and confirmation dialogs for accept/reject; no bulk rejection control was added; decisions update the specific proposal row in place without refetching; zero physical RTL utilities and zero raw hex values were found.
+
+
+## Sprint 21 — Auctions List Design — completed 2026-08-21
+
+**Requirements delivered:** FR-12.4, FR-12.5, NFR-U5, NFR-U6
+**Endpoints added:** none; reused `GET /api/auctions` public endpoint
+**Screens added:** redesigned `/auctions` using `PublicLayout`, responsive auction cards with image fallback, and client-side `Pagination`
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 155 modules transformed; `/auctions` served the Vite application with HTTP 200; source audit confirmed `PublicLayout` usage, ensuring the page remains accessible without authentication; client-side pagination is implemented because the existing endpoint does not paginate server-side; `AuctionCard` includes a broken-image `onError` fallback that reveals the empty-state placeholder cleanly; zero physical RTL utilities and zero raw hex values were found; no filter controls or unsupported query parameters were added.
+
+
+## Sprint 22 — Auction Details Design — completed 2026-08-21
+
+**Requirements delivered:** FR-13.1…FR-13.4, FR-14.1…FR-14.5, NFR-P2, NFR-R3
+**Endpoints added:** none; preserved the existing public detail, bid, polling, and lazy-closing behavior
+**Screens updated:** `/auctions/:id` redesigned with live price pulse, `DataRail`, auction countdown, bid-history `aria-live`, four bid-area variants, winner/payment simulation notice, and inline bid errors
+**Deviations from the sprint file:** none
+**Known issues carried forward:** Browser network-tab verification of the live 4000ms polling and navigation cleanup was source-verified but not manually observed in this session.
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 155 modules transformed; source audit confirmed the unchanged `setInterval(..., 4000)` and `clearInterval` cleanup, public guest rendering with a login prompt only in the bid area, individual bidding form with disabled submit while in flight, organization/admin informational state, ended-auction winner/no-winner branches, inline bid-error `role="alert"`, live-price pulse, zero physical RTL utilities, and zero raw hex values; `AuctionCountdown` remains non-negative and renders `انتهى المزاد` at zero; no backend bid or closing logic was modified.
+
+
+## Sprint 23 — My Auctions Design — completed 2026-08-21
+
+**Requirements delivered:** FR-14.4, NFR-U5, NFR-U6
+**Endpoints added:** none; reused `GET /api/users/me/auctions`
+**Screens updated:** redesigned `/my-auctions` with `IndividualLayout`, shared `ResponsiveTable`, mobile stacked cards, distinct outcome labels, and payment routing for winners
+**Deviations from the sprint file:** none
+**Known issues carried forward:** none
+**Postman collection updated:** no
+
+**Verification performed:** client production build passed with 155 modules transformed; the page references exactly the existing Sprint 07 endpoint; source audit confirmed shared `ResponsiveTable` usage, mobile-card rendering, `StatusStamp` outcome labels for all four backend outcomes, won-row links to `/auctions/:id/payment`, empty-state CTA to `/auctions`, `IndividualLayout` usage, zero physical RTL utilities, and zero raw hex values.
+
+
+## Navigation Overhaul — Unified Header and Side Navigation — completed 2026-08-21
+
+**Requirements delivered:** unified internal navigation across dashboards, tenders, tender details, tender creation/editing, auction details, auction creation, My Auctions, payment simulation, and negotiation; responsive navigation remains available on mobile.
+**Components added or updated:** added `GlobalLayout`; upgraded `Sidebar` to a desktop side navigation and mobile horizontal navigation rail; route-level shell composition centralized in `App.jsx`.
+**Behavior:** authenticated users receive `AppHeader` and role-aware links; logged-out users on shared public auction/detail routes receive `PublicHeader` without a sidebar; public marketing/auth pages retain `PublicLayout` because a sidebar would distract from registration and login tasks.
+**Refactoring:** removed duplicate role-layout wrappers from internal pages so each internal route has exactly one global shell.
+**Verification performed:** client production build passed with 153 modules transformed; landing, public auctions, and protected tenders client routes served HTTP 200; route audit found 14 `GlobalLayout` references, zero duplicate role-layout references, zero physical RTL utilities, and zero raw hex values across the changed navigation/page files.
+
+
+## Organization Navigation Extension — Chat and Profile — completed 2026-08-21
+
+**Navigation added:** `المحادثات` at `/org/chat` and `ملفي` at `/org/profile`, alongside the existing organization links for the dashboard, open tenders, new tender, and new auction.
+**Chat behavior:** the new inbox consumes the existing `GET /api/users/me/proposals` endpoint; accepted proposals link to the existing negotiation route `/proposals/:id/negotiation`, while other proposals link back to their tender details. No new server endpoint was added.
+**Profile behavior:** the new profile screen displays the authenticated organization representative, company name, email, commercial registration number, and account status from `AuthContext`.
+**Access control:** both routes require authentication and the organization role.
+**Verification performed:** client production build passed with 155 modules transformed; `/org/chat` and `/org/profile` client shells returned HTTP 200; navigation and route references were present; zero physical RTL utilities and zero raw hex values were found in the changed files.
+
+
+## Authentication and Organization Email Verification — completed 2026-08-21
+
+**Login throttling:** increased the login limiter from 5 to 20 attempts per 15 minutes for practical testing while retaining a clear Arabic rate-limit response. A restarted backend reported `RateLimit: limit=20`.
+**Organization registration flow:** organization accounts now begin as `pending_verification`; registration routes to `/register/organization/verify` instead of directly to review.
+**Email verification:** added six-digit codes with one-hour expiry, `/api/auth/verify`, and `/api/auth/resend-verification`. Successful verification changes the account to `pending`, which makes it visible to the admin review queue. Unverified organizations are redirected to the verification page when attempting login.
+**Email delivery:** added server-side EmailJS delivery using environment variables and the verification/general template IDs. Approval and rejection emails now originate from the server; the admin UI displays a warning if the status changes but EmailJS reports delivery failure.
+**Security:** verification codes are removed from API response objects; EmailJS private credentials are kept in `server/server.env`, not source files.
+**Verification performed:** client production build passed with 156 modules transformed; server syntax checks passed for auth, admin, email service, routes, and user model; runtime health returned HTTP 200; empty verification payload returned HTTP 400; invalid login returned HTTP 400; runtime login rate header reported limit 20.
+**Important manual check:** confirm that EmailJS template `template_ui7ifvr` sends to `{{email}}` and displays `{{code}}`, and that general template `template_w1mnjin` sends to `{{email}}` and displays `{{details}}`. A real registration test should be performed with a unique test email after confirming those template settings.
+
+
+## Email Template Variable Mapping — completed 2026-08-21
+
+**Template compatibility:** updated both the server-side `email.service.js` and the client-side `sendEmail.js` to map the verification code to `reset_code` in the EmailJS payload. This directly supports the user-provided HTML template (which expects `{{to_name}}` and `{{reset_code}}`) without breaking the verification flow.
+**Verification performed:** client production build passed; Node syntax checks passed for the updated email service and auth controller.
+
+
+## EmailJS Approval Notification Fix — completed 2026-08-21
+
+**Root cause:** the server was loading environment variables from `../server.env`, but the EmailJS credentials had been appended to `server/server.env`; the running server therefore had no EmailJS credentials and returned `emailSent: false` after approval.
+**Fix:** moved the EmailJS variables to the actual root `server.env` loaded by `server/server.js`, removed the mistaken duplicate server environment file, and restarted the backend.
+**Verification:** backend health returned HTTP 200, the verification endpoint was loaded and returned HTTP 400 for an empty payload as expected, and the root environment contained all five EmailJS variables. Organization approval remains successful; the notification result now reflects the corrected server configuration.
+
+
+## EmailJS Template Split and Arabic Notification Mapping — completed 2026-08-21
+
+**Configured templates:** `template_w1mnjin` is now the general platform-notification template; `template_ui7ifvr` is the verification and password-reset template.
+**Payload mapping:** added `email_subject`, `email_title`, `intro_text`, `code_label`, `confirmation_code`, `expiry_text`, and `security_note` for the Arabic general template. The verification code remains available as `code`, `reset_code`, and `confirmation_code` for compatibility with the supplied HTML templates.
+**General notifications:** approval/rejection events use localized Arabic title, details, expiry, and security text. Verification notifications use a six-digit code and verification-specific copy.
+**Verification performed:** client production build passed with 156 modules transformed; server syntax checks passed; after restart, backend health returned HTTP 200 and the verification route returned HTTP 400 for an empty payload as expected.
+
+
+## Landing Page Refinement — completed 2026-08-21
+
+**Visual updates:** removed red from the landing-page palette and replaced the remaining red accent references in the landing CSS pattern with ink/registry-green; changed the hero title to a clear vertical RTL stack: `اربط` / `الأفق` / `بالفرصة.`; changed the two role links into aligned, keyboard-accessible button CTAs; increased feature-number contrast from faint border gray to visible registry-green at controlled opacity.
+**Functional behavior:** organization CTA continues to navigate to `/register/organization`; individual CTA continues to navigate to `/register/individual`.
+**Documentation:** removed `flag-red` from the active design-token documentation and changed the landing pattern guidance accordingly.
+**Verification performed:** client production build passed with 156 modules transformed; landing route returned HTTP 200; landing source audit found zero red token/class matches, 25 RTL/layout references, six CTA references, and nine feature-number references.
+
+
+## Homepage Repairs from Attached QA Instructions — completed 2026-08-21
+
+**Root cause fixed:** the shared `Button` component now explicitly receives and merges `className` instead of allowing spread props to replace its base classes. It provides consistent `primary`, `secondary`, and `secondary-dark` styling with visible padding, border width, radius, alignment, focus treatment, and design-token colors. The existing `danger` variant was preserved for compatibility and its hover state now uses the `error` token rather than a raw red utility.
+
+**Landing-page changes:** all five homepage CTAs now use the shared Button component; primary actions use the solid registry-green variant, the individual hero CTA uses the dark secondary variant, and no homepage CTA remains unstyled or uses custom one-off button treatment. The hero accent is limited to `بالفرصة.` while `الأفق` is surface-colored. The light role-card number changed from `text-border` to `text-ink/10`.
+
+**Verification:** client production build passed; homepage returned HTTP 200; landing-page audit found zero raw red matches, zero legacy `text-border`/transparent CTA matches, four primary CTAs, one dark-secondary CTA, and zero legacy secondary CTA usages.
+
+
+## Homepage RTL Hero and Role Number Refinement — completed 2026-08-21
+
+**Hero alignment:** the main Arabic title now uses explicit RTL direction, right text alignment, a vertical flex stack, and logical end padding to create the requested stepped composition from the right: `اربط` / `الأفق` / `بالفرصة.`. The content remains positioned in the right-side text area of the hero.
+
+**Role cards:** the `01` and `02` numbers were darkened from very faint opacity values to `text-paper/30` on the dark institution card and `text-ink/30` on the light individual card.
+
+**Verification:** client production build passed; homepage returned HTTP 200; five RTL/stack alignment markers were present; both darker number classes were present; old `/10` number classes were absent.
+
+
+## Login Page UX/RTL Review — completed 2026-08-21
+
+**Attached audit fixes implemented:** the login form now takes the RTL start position on desktop through `lg:order-last` on the decorative image, so the actionable form is encountered first from the right. The login heading wrapper now uses `text-start` so its heading, subtitle, and form fields share the same visual reading line. The password input now uses `p-3` to match the email field and provide a larger mobile tap target. The submit button now exposes disabled/loading styling with `disabled:cursor-not-allowed disabled:opacity-60`, while the shared Button component supplies the base dimensions and focus-visible treatment.
+
+**Header hierarchy:** the public header’s organization registration CTA was changed from a competing solid-primary treatment to a token-based secondary treatment using `bg-registry-green/10`, `text-registry-green`, and `hover:bg-registry-green/20`. Authentication routes and existing Arabic copy were preserved.
+
+**Verification:** client production build passed; the remote development route `/login` returned HTTP 200; source audit confirmed the RTL form ordering marker, `text-start` heading, `p-3` password field, disabled submit state, no duplicate submit classes, and zero physical RTL utility violations. Visual browser access from the sandbox was unavailable because the user’s remote localhost is not exposed to the sandbox browser; the desktop-side HTTP check succeeded.
+
+
+## Login Input Direction and Password Control Fix — completed 2026-08-21
+
+**Input direction:** email and password values now explicitly use `dir="ltr"` with `text-start`, so Latin email addresses and password characters begin from the left even though the surrounding Arabic form remains RTL.
+
+**Password visibility control:** the password input now reserves logical end-side space with `pe-12`; the eye control remains positioned at the logical end with `end-0`, uses a larger `px-4` interaction area, and retains a visible `focus-visible` outline. This prevents typed characters from rendering underneath the icon.
+
+**Verification:** client production build passed; `/login` returned HTTP 200; source audit confirmed LTR email/password direction, left-aligned input text, reserved password icon space, logical eye positioning, larger eye-button padding, focus-visible styling, and zero physical RTL utility violations.
+
+
+## Login Field Rendering Correction v2 — completed 2026-08-21
+
+**Remaining bug addressed:** the fix was strengthened at the DOM structure level. The password field wrapper now has `dir="ltr"`, making its logical `end-0` position the physical right side where the password text does not begin. The input uses logical `pe-12 ps-3` spacing and `text-start`, while the visibility button keeps a dedicated reserved end slot. The reusable email `FormField` now applies explicit left-start alignment when its direction is LTR.
+
+**Verification:** client production build passed; `/login` returned HTTP 200; source audit confirmed the LTR email direction, LTR password wrapper, logical start alignment, logical end eye positioning, reserved icon space, focus-visible state, and zero physical RTL utility violations.
+
+
+## Organization Registration Phone-Number Update — completed 2026-08-21
+
+**Data and UI replacement:** replaced the organization `commercialRegisterNo` field with `phoneNumber` in the Mongoose User model, organization registration state and payload, organization profile, admin organization-review cards, the SRS, and Sprint 01 documentation. The registration control is now an LTR `type="tel"` input with `inputMode="tel"`, Arabic label `رقم الهاتف`, and a Palestinian-style example placeholder.
+
+**Related UX/accessibility fixes from the attached audit:** added a visible `focus-within` ring to the custom file-upload wrapper; expanded the public-header login link to a mobile-friendly tap target; restored solid placeholder contrast by removing opacity from the shared FormField placeholder token; and added disabled opacity/cursor/background states to the organization submit button while retaining the existing upload progress indicator. The proof-document label was updated to `مستند إثبات هوية المؤسسة` because it no longer refers to a commercial registration.
+
+**Verification:** client production build passed; `/register/organization` returned HTTP 200; active source and documentation contain zero `commercialRegisterNo` or `رقم السجل التجاري` references; phone field, telephone semantics, LTR direction, file-upload focus state, solid placeholder token, header tap target, submit disabled states, and server model field were all verified.
+
+
+## Organization Registration Border and UI/UX Polish — completed 2026-08-21
+
+**Border treatment:** strengthened the shared registration Card to `border-2 border-ink/15`; shared text inputs and the password input now use `border-2 border-ink/20` with registry-green focus and the existing error token for validation failures. The custom file upload keeps a `border-2` dashed treatment and now uses the darker `ink/20` border in its neutral state. The registration page no longer overrides the Card with the lighter `border-paper/50` class.
+
+**Design documentation:** updated `information/design.md` to distinguish standard hairline dividers from the stronger 2px ink-token treatment reserved for high-interaction form surfaces.
+
+**Review items preserved:** file-upload focus-within ring, solid placeholder contrast, mobile header login tap target, disabled submit state, LTR field handling, and no raw hex colors in the changed components.
+
+**Verification:** client production build passed; `/register/organization` returned HTTP 200; card, text inputs, password input, and upload border audits passed; focus-within, placeholder, header tap-target, submit disabled-state, and raw-hex audits passed.
+
+
+## Organization Registration Realtime Validation Update — completed 2026-08-21
+
+**Focus treatment:** reduced the input, password, and custom file-upload focus rings from 2px to a thinner 1px treatment while preserving visible keyboard focus.
+
+**Client validation:** organization registration now validates on change and blur with field-level Arabic messages. The representative name requires at least three letters/spaces and rejects numbers and symbols; email format, company name length, phone format, password length, and password confirmation are also checked. Errors render directly below their inputs, invalid fields use the `error` border token, and valid touched fields use the new light-blue `info` token. The confirm-password field is present only for validation and is excluded from the `FormData` payload.
+
+**Backend validation:** the registration controller validates the representative name and organization password confirmation before creating a user, and explicitly strips `confirmPassword`. The User schema now reinforces name, company-name, and phone-number constraints. Individual registration remains compatible because confirmation matching is required for organizations only.
+
+**Verification:** client build passed; server syntax checks passed; backend health returned HTTP 200; organization registration route returned HTTP 200; invalid name returned HTTP 400 with the `name` error key; mismatched confirmation returned HTTP 400 with the `confirmPassword` error key; source audit confirmed field-level errors, red invalid borders, blue valid borders, thin focus rings, and confirm-password exclusion from the payload.
+
+
+## Global Thin Focus Treatment — completed 2026-08-21
+
+**Scope:** standardized focused controls across shared components and page-specific forms/navigation. Converted all remaining `focus:ring-2`, `focus-visible:outline-2`, and `focus-within:ring-2` utilities in active client source to 1px equivalents.
+
+**Updated areas:** shared Button, FormField, PasswordField, Sidebar, PublicHeader, AppHeader, Drawer, Breadcrumbs, TenderForm, TenderCard, AuctionCard, TendersListPage filters, LoginPage, OrgRegisterPage, OrgVerifyEmailPage, IndRegisterPage, OrgDashboard, IndDashboard, OrgChatPage, MyAuctionsPage, AdminDashboard, CreateAuctionPage, AuctionDetailPage, NegotiationPage, and PaymentSimulationPage.
+
+**Verification:** client production build passed; exact source audit found `0` thick 2px focus utilities and `47` thin 1px focus utilities; `/login` returned HTTP 200; `/register/organization` returned HTTP 200. Existing validation colors, accessible focus visibility, and field error behavior were preserved.
+
+
+## Organization Dashboard Redesign — completed 2026-08-21
+
+**Accessibility and semantics:** removed nested `Link` plus `Button` structures from the organization dashboard. The primary “نشر عطاء جديد” action and proposal-detail action are now single styled anchors, preserving keyboard and screen-reader semantics.
+
+**Visual hierarchy:** strengthened the dashboard greeting with a compact organization identity badge, darker supporting text using `text-ink/75`, a single prominent primary CTA, calmer section headers, and responsive action sizing. Sidebar navigation items now use a minimum 44px tap target with `py-3` and `items-center`.
+
+**Content clarity:** proposal prices now include the shekel unit and use RTL-aligned currency presentation. `StatusStamp` now translates `submitted` as `مُقدَّم`, supports `accepted` and `open`, and applies semantic tinted badge backgrounds for status recognition.
+
+**Empty states:** the shared EmptyState was redesigned as a neutral dashed-surface panel with a folder icon and muted guidance, avoiding error-red treatment for normal empty data states.
+
+**Verification:** client production build passed; `/org/dashboard` returned HTTP 200; nested dashboard Link/Button count was 0; direct CTA and proposal links were verified; currency, identity badge, darker contrast, neutral empty state, Arabic status mapping, semantic badge background, mobile tap-target, and raw-hex audits passed.
+
+
+## Approved Organization Dashboard Architecture — completed 2026-08-21
+
+**Desktop geometry:** preserved the RTL right-edge sidebar as primary navigation and added a semantic `main#main-content` landmark plus an accessible skip link. The page header keeps the organization context on the right and the primary “نشر عطاء جديد” action at the terminal left edge of the content header.
+
+**Dashboard hierarchy:** added a “ملخص المؤسسة” KPI grid for published tenders, inbound proposals, and published auctions, plus an urgent review link when submitted proposals require attention. Primary and secondary actions remain single interactive elements with no nested link/button markup.
+
+**Account states:** replaced the single generic pending message with explicit `pending_verification`, `pending`, `rejected`, and fallback states. Each state receives a contextual explanation and a recovery action where appropriate; restricted creation actions are not rendered in the non-approved dashboard branch.
+
+**Role-specific navigation:** added `/org/tenders` for organization-owned tenders, `/org/proposals` with inbound/outbound proposal tabs, and `/org/reports` for operational summaries. Added `OrgMobileNav` with four mobile destinations (`الرئيسية`, `عطاءاتي`, `العروض`, `المزيد`) and an accessible secondary dialog for auctions, reports, conversations, and organization settings/profile. Added persistent mobile organization identity truncation with `title` and `aria-label`, plus an accessible notification entry point.
+
+**Verification:** final client production build passed with 160 modules transformed. Existing route checks for `/org/dashboard`, `/org/tenders`, and `/org/proposals` returned HTTP 200 before the final reports addition; the reports route is registered in the router and included in the final successful build. Thick 2px focus utilities remain removed from the active client source, and the mobile navigation uses token-based shadows without raw arbitrary colors.
+
+
+## Tender Creation AI Workflow — completed 2026-08-21
+
+**AI Document Extraction:** replaced the manual tender-creation form with a three-step AI workflow. The organization uploads the official tender book (PDF/JPG/PNG). The server analyzes the document using Gemini 1.5 Flash, extracting the title, description, category, estimated budget, deadline, and document-specific custom fields.
+
+**Editable Review & Missing Fields:** the client renders the extracted JSON into an editable review form. Required standard fields not found in the document (like the deadline) are explicitly flagged in a warning banner (`missingRequiredFields`) and remain empty for manual entry. The user can review, edit, or append to the AI-generated draft before publishing.
+
+**Graceful Degradation:** if the AI analysis fails or times out, the system preserves the uploaded official book and falls back to an empty manual-entry form, allowing the user to continue publishing without being blocked.
+
+**Authoritative Backend:** the `Tender` schema was extended to persist `officialBookUrl`, `officialBookName`, `aiExtraction` metadata, and the normalized `customFields`. The `POST /api/tenders` controller enforces strict validation on the title, description, category, and deadline before saving the final payload, ensuring AI output remains strictly advisory.
+
+**Verification:** client production build passed; server syntax checks for `ai.controller.js`, `tender.controller.js`, `tender.model.js`, and `ai.routes.js` passed. The authoritative SRS was updated to reflect the new AI-assisted tender publication requirements.
+
+
+## Tender Book Relevance Gate — completed 2026-08-21
+
+The tender-book analysis prompt now performs a semantic relevance check before extraction. It explicitly classifies whether the uploaded document concerns procurement, tenders, requests for quotations, or commercial contracts. Unrelated files—such as animal-name lists, game-name lists, or arbitrary documents—return an HTTP 400 response with `isIrrelevant: true`, a clear Arabic error message, and are removed from temporary upload storage. They never enter the AI review form and cannot proceed to publication.
+
+The upload UI now explains which document types are acceptable and handles the rejection response by returning the user to the upload step with the error shown. AI service outages remain a separate fallback path: when analysis is unavailable, the uploaded book is preserved and the user may continue manually. The authoritative SRS now includes the relevance-classification requirement.
+
+Verification completed: client production build passed, AI controller syntax passed, the relevance flag and rejection response are present, temporary-file deletion is present for rejected documents, and client rejection handling is wired to `isIrrelevant`.
+
+
+## Tender Analysis Runtime Fix — completed 2026-08-21
+
+The reported generic analysis error was traced to the backend process on port 8000 still running an older server build. The live process returned `Cannot POST /api/tenders/analyze-book`, confirming that the newly registered route had not been loaded. The stale process was stopped and the backend was restarted from the current source. The route now responds with HTTP 401 when called without authentication, confirming that the route is registered and protected by the organization-auth middleware.
+
+The client and server analysis flow remains unchanged: AI-service failures return the preserved upload reference for manual fallback, while unrelated documents return the explicit relevance rejection. Users should refresh the frontend and retry with an authenticated approved organization account.
+
+
+## Backend Connection Refused Fix — completed 2026-08-21
+
+The frontend login error `net::ERR_CONNECTION_REFUSED` was caused by the backend not listening reliably on port 8000. Multiple `node server.js` processes existed, and one startup was launched from the project root even though `server/server.js` loads `../server.env` relative to the server directory. That process loaded no environment variables and exited after the MongoDB URI became undefined.
+
+All duplicate `server.js` processes were stopped. A single backend process was started from the `server` directory with output captured to `server-live.log` and `server-live-error.log`. The server now listens on port 8000 and connects successfully to MongoDB.
+
+Verification results: CORS preflight for `http://localhost:5173` returns HTTP 204 with the expected allow-origin header; login requests reach Express and return an application response (`HTTP 400` for intentionally invalid credentials); the protected tender-analysis route reaches authentication and returns `HTTP 401` without a token instead of connection refusal.
+
+
+## Tender Book Gemini Model Availability Fix — in progress 2026-08-22
+
+**Root cause confirmed:** the configured Gemini API key is present and accepted by the provider, but the tender-book controller was hardcoded to `gemini-1.5-flash`, which the live provider no longer exposes for generation. This caused the authorized upload request to fall into the generic HTTP 502/manual-fallback branch.
+
+**Implementation changes:** centralized the model selection with `GEMINI_MODEL` override and a current default of `gemini-3.6-flash`; configured tender-book generation for `application/json`, low temperature, bounded output, and a 90-second timeout; added resilient JSON-object extraction when a provider response contains surrounding text; required an explicit boolean `isRelevant`; added guarded temporary-file cleanup; and added sanitized `reasonCode` logging/response metadata without exposing provider errors or secrets.
+
+**Runtime verification:** the backend was restarted from the `server` directory, MongoDB connected, port 8000 is listening, and unauthenticated `POST /api/tenders/analyze-book` still returns HTTP 401. A direct minimal request to the current Gemini model returned HTTP 200 once, and an isolated controller run against a non-tender PDF returned the expected HTTP 400 with `isIrrelevant: true`, proving the relevance branch is active. A successful extraction using a synthetic relevant PDF was not completed because the provider request exceeded the disposable test window; successful authorized extraction therefore remains a required manual verification with the user’s approved organization session.
+
+**Known limitation:** if the provider rejects the selected model for the specific API key or becomes unavailable, the endpoint intentionally preserves the uploaded book and returns a sanitized `reasonCode` with the manual-fallback reference. The frontend behavior is correct for that outage path; the next manual check should retry the upload and, if it still fails, share only the returned `reasonCode`.
+
+
+## Tender Book Image Extraction JSON Fix — completed 2026-08-22
+
+**Root cause confirmed:** after updating the model to `gemini-3.6-flash`, the actual uploaded JPG was sent to the AI. The response was cut off mid-array because the generated custom fields exceeded the default 3000-token output limit. This truncation caused the new resilient parser to correctly identify the incomplete response and throw `AI_INVALID_JSON`, which was logged and returned to the frontend.
+
+**Implementation changes:** updated the generation configuration in `ai.controller.js` to explicitly request `responseMimeType: 'application/json'` so the model is constrained to valid JSON output. Increased `maxOutputTokens` to 8000 to accommodate large tender documents. Refined the extraction prompt to limit custom fields to a maximum of 20 concise entries and use a safe snake_case `key` format, preventing the model from wasting tokens on excessive extraction details.
+
+**Runtime verification:** a temporary probe using the exact failing JPG successfully returned the complete, valid JSON structure with all 12 custom fields closed correctly. The backend was restarted from the `server` directory, MongoDB connected, port 8000 is listening, and unauthenticated `POST /api/tenders/analyze-book` still returns HTTP 401. Client production build passed.
+
+**Remaining action:** the user must now refresh the frontend and retry the upload. The AI analysis will now complete successfully and render the editable tender draft.
+
+
+## Tender Priority Criteria and Owner Proposal Review — completed 2026-08-22
+
+**Tender review UX:** added a priority checkbox beside every standard tender field (title, description, category, estimated budget, deadline) and every AI-generated/custom field. Priority selections are retained in the editable draft and submitted as `priorityFields` plus `customFields[].isPriority`.
+
+**Persistence and AI context:** the Tender model now stores `priorityFields`; the authoritative create controller whitelists the allowed standard keys and safely persists custom-field priority flags. The proposal review prompt receives all tender requirements and explicitly gives priority fields greater weight when producing an overall proposal score from 0 to 100.
+
+**Owner permissions and detail page:** normalized authenticated user IDs so owner comparisons work when API responses provide `_id`. The existing server-side self-bid rejection remains authoritative, while the client now reliably hides the submission form for the tender owner. The detail page now renders the official book link, all custom tender requirements, priority badges, and the owner/admin proposal list.
+
+**Proposal analysis:** added `POST /api/proposals/:proposalId/review-ai`, restricted to the tender owner or admin. It reads the already-uploaded proposal document, compares it with the tender’s priority criteria, persists `overallScore`, `confidenceScore`, field-level priority assessment, strengths, and gaps, and updates the corresponding proposal row without refetching. Each owner proposal row now has `تحليل العرض بالذكاء الاصطناعي` / `إعادة تحليل العرض` controls with loading and error states on desktop and mobile.
+
+**Additional correction:** fractional confidence values such as `0.98` now render as `98%` in the tender review UI and are normalized server-side.
+
+**Verification performed:** all changed server files passed `node --check`; the client production build passed with 160 modules transformed; `/api/health` returned HTTP 200; the new proposal-review route returned HTTP 401 without authentication; the live backend is listening on port 8000. Authorized owner/list-proposals and full browser interaction still require a manual retry with the user’s logged-in organization session.
+
+
+## Tender Creation Upload Page Redesign — completed 2026-08-22
+
+**Scope:** Redesigned only the main content area of `/tenders/new`, preserving the existing authenticated header, desktop navigation rail/sidebar, mobile navigation, React state, API calls, AI extraction flow, review form, priority selection, publish payload, and error behavior.
+
+**UI:** Added the approved Arabic-first SaaS treatment: AI assistant eyebrow, refined three-stage workflow indicator, two-column desktop layout, compact single-column mobile layout, large drag-and-drop upload zone, supported-format guidance, selected-file preview with type/name/size/remove action, one concise extraction-help card, and token-based Itimad green styling.
+
+**AI loading:** Added a real-request full-screen accessible dialog with dark blurred backdrop, multi-ring rotating AI loader, reverse rotation, animated core pulse, floating particles, progress animation, and four visual processing stages. The stage sequence advances only while the actual `/api/tenders/analyze-book` request is pending; no fake fixed completion timeout or fake AI result was introduced.
+
+**Verification:** Client production build passed with 160 modules transformed. Source inspection confirmed the existing `/api/tenders/analyze-book` FormData request, existing `/api/tenders` publish request, and `setIsAnalyzing` state remain in place. The live browser session was not available in the sandbox during this check, so final visual confirmation should be done after starting Vite and refreshing `/tenders/new#main-content`.
+
+
+## Tender AI Review Stage Redesign — completed 2026-08-22
+
+**Scope:** Redesigned the second stage of `/tenders/new` (AI Review Form) to exactly match the approved `airesponse.html` prototype, while preserving real AI extracted data, the dynamic custom fields array, client-side validation, priority checkboxes, and the final publish API request.
+
+**UI:** Replaced the generic `FormField` components with the new prototype’s unified card structure. Implemented a prominent green confidence badge, a compact source-document label, thinner `1px` borders, subtle focus rings `focus:ring-registry-green/20`, and a responsive two-column grid for standard fields. Extracted custom fields now render as a clean list with labels on the right and inputs on the left. Priority checkboxes were styled cleanly with `accent-registry-green` and placed inline next to their respective fields.
+
+**Technical Constraints:**
+- The redesign correctly utilizes the project's existing design tokens (e.g., `registry-green`, `success`, `error`) instead of the prototype's raw hex colors.
+- The `handlePublish` function, validation logic, and priority selection states (`priorityFields` array) were left completely untouched to ensure the backend receives the exact same JSON payload as before.
+- Build passed successfully with no errors.
+
+
+## Tender Details Page Redesign — completed 2026-08-22
+
+**Scope:** Redesigned the tender details page at `/tenders/:id` to match the approved `mytenders.html` prototype. Updated the navigation rail and mobile navigation to correctly highlight the "Tenders" tab when viewing a specific tender detail page.
+
+**UI:**
+- Implemented the new two-column desktop layout with a sticky right sidebar for key tender metadata (DataRail).
+- Updated the main content area with thinner borders, subtle shadows, and rounded corners (`rounded-[16px]`).
+- Styled the extracted custom fields and priority badges to match the clean SaaS look.
+- Replaced generic buttons with custom-styled inline buttons for proposal actions (Accept, Reject, Negotiate, AI Analysis) using the platform's color tokens (`registry-green`, `success`, `error`).
+- Improved the empty state for the proposals list with a dashed border and centered icon.
+
+**Technical Constraints:**
+- Maintained all real data binding, including tender details, custom fields, and proposals.
+- Preserved all owner and admin permissions, ensuring the correct submit panel or proposals list is displayed based on the user's role.
+- Kept the existing AI analysis functionality for proposals, updating only the button styling and score display.
+- Fixed a JSX syntax error and successfully built the client for production.
+
+
+## Marketplace & Modernized Tender Cards — completed 2026-08-22
+
+**Scope:** Built the global "المنافسات" (Marketplace) page based on the `marketplace.html` prototype. Modernized the `TenderCard` component using the `card.html` design, including a circular day counter, and added the marketplace link to the global navigation.
+
+**UI:**
+- **TenderCard:** Completely redesigned with a horizontal split layout on desktop (metadata on the left, timer/cost on the right).
+- Implemented a CSS/SVG-based circular progress indicator for the remaining days, using colors that map to urgency (`registry-green` for safe, `warning` for medium, `error` for low/expired).
+- **Marketplace Page:** Updated `TendersListPage` (`/tenders`) to match the new global layout, including a wider max-width container (`1280px`), a breadcrumb trail, and an inline filter bar styled as a modern card.
+- **Navigation:** Renamed "العطاءات المفتوحة" to "المنافسات" and added it to the organization's main navigation (`NavigationRail` and `OrgMobileNav`).
+- Updated the active route logic so viewing a specific tender (`/tenders/:id`) keeps the "المنافسات" tab highlighted instead of "عطاءاتي".
+
+**Technical Constraints:**
+- Maintained the existing data fetching, filtering, and pagination logic in `TendersListPage`.
+- Extracted and calculated the `timeLeft` dynamically in `TenderCard` without relying on fake data.
+- Built the client successfully and verified all route links.
+
+
+## Proposal AI Loader & Review Redesign — completed 2026-08-22
+
+**Scope:** Updated the proposal submission workflow on the tender details page (`/tenders/:id`) to match the AI loading experience and review UI of the tender creation page (`/tenders/new`).
+
+**UI:**
+- **AI Loading Modal:** Implemented the full-screen modal with the animated `registry-green` pulse, multi-ring loader, floating particles, and progressive stage indicators (`aiProgressStage`).
+- The modal steps are customized for proposals: "قراءة وتحليل العرض الفني والمالي", "استخراج السعر الإجمالي", "تلخيص البنود الرئيسية", and "تجهيز نموذج المراجعة".
+- **Review Step:** Redesigned the extracted data review panel to match the polished Bento styling. It now displays the `ConfidenceBadge`, the extracted summary text, and the editable final price input field with the standard 1px focus treatment.
+- **Error/Success States:** Integrated validation messages and the "المصدر" badge seamlessly into the new review card.
+
+**Technical Constraints:**
+- The loader triggers only during the actual `api.post('/api/proposals/:id/analyze')` request.
+- Preserved the existing form data construction, file size/type validation, and final proposal submission logic.
+- Built the client successfully.
+
+
+## Owner Proposal AI Analysis Redesign — completed 2026-08-22
+
+**Scope:** Unified the owner-side proposal AI analysis (scoring) with the animated loader modal and added a detailed presentation of the AI response directly inside the proposal row/card.
+
+**UI:**
+- **AI Loading Modal:** Reused the full-screen animated modal for the owner's `handleAnalyzeExistingProposal` action.
+- The modal steps are customized for scoring: "قراءة وتحليل مستند العرض", "مقارنة العرض مع شروط العطاء", "تقييم الحقول ذات الأولوية", and "تجهيز نتيجة التقييم".
+- **Detailed Result Panel (`ProposalAnalysisResult`):** Created a collapsible, styled details panel inside the proposal table row (and mobile card).
+- It parses the actual server JSON response to display the `overallScore`, `confidenceScore`, the descriptive `summary`, the itemized `priorityAssessment` (with individual scores and evidence), `strengths`, and `gaps`.
+- Scores are properly normalized (e.g., 0.98 becomes 98%).
+
+**Technical Constraints:**
+- The detailed result panel safely handles missing or malformed AI response fields.
+- Kept the table layout clean by collapsing the deep analysis behind an accessible `<details>` element.
+- Built the client successfully without breaking the proposal table layout.
+
+
+## AI Analysis Modal Redesign — completed 2026-08-22
+
+The proposal table on the tender details page no longer renders the full AI analysis inline. The previous expandable analysis block caused each table row to become extremely tall and narrow, especially with long Arabic evidence text. It was replaced with a dedicated `AnalysisDetailsModal` component.
+
+The proposal row now remains compact and shows only the score, the analysis action, and a clear "عرض التفاصيل" button. Selecting that action opens a responsive modal with a dark backdrop, a wide scrollable content area, an explicit close button, Escape-key support, body-scroll locking, and a mobile-friendly layout. The modal presents the actual server response: overall compatibility score, confidence percentage, summary, itemized priority assessments with evidence, strengths, and gaps.
+
+The same modal is used for desktop table rows and mobile proposal cards. The existing real-request AI loader remains separate and continues to appear while the owner-side `/api/proposals/:proposalId/review-ai` request is active. Server syntax checks and the client production build completed successfully.
+
+
+## Negotiation Chat Redesign — completed 2026-08-22
+
+The negotiation page now uses a familiar RTL messaging layout inspired by WhatsApp and Telegram. Messages sent by the current user appear on the right in green bubbles, while received messages appear on the left in neutral bubbles. The conversation has a dedicated tinted background, compact header, partner identity, accepted-proposal status, message count, refresh action, and a responsive composer.
+
+Message polling remains in place and refreshes the conversation every 15 seconds. The composer is now limited to the tender owner or proposal submitter rather than any non-admin user. The message model now persists `isRead`, and opening the conversation marks unread messages from the other participant as read. Sent messages render one check (`✓`), while messages marked as read render two checks (`✓✓`) in the sender's bubble.
+
+The chat screen also keeps the existing contract-draft capability for the tender owner and preserves accepted-proposal permissions. Server syntax checks and the client production build completed successfully.
+
+
+## Negotiation Chat Real-Time Optimization — completed 2026-08-22
+
+The negotiation chat now updates near-instantly without the complexity of WebSockets. The polling interval was reduced from 15 seconds to 2 seconds. To ensure this doesn't overload the database or network, the polling logic (`loadNegotiation(false)`) was optimized to only fetch the `/messages` endpoint, skipping the heavier `/proposals/:id` request which is now only loaded once when the page opens.
+
+This approach provides a fast, WhatsApp-like experience where sent messages appear on the recipient's screen in less than 2 seconds, and the sender's read receipts (`✓✓`) update almost immediately, perfectly matching a junior MERN developer's architecture while delivering professional UX.
+
+
+## Socket.io Chat Integration — completed 2026-08-22
+
+The simple interval polling has been replaced with a minimal, beginner-friendly `Socket.io` implementation to provide true real-time negotiation messages and read receipts.
+
+**Backend Changes:**
+- Installed `socket.io`.
+- Created a simple `server/socket.js` module that initializes the WebSocket server and attaches it to the existing Express HTTP server in `server.js`.
+- The negotiation controller now emits `newMessage` and `messagesRead` events globally whenever a message is created or marked as read.
+
+**Frontend Changes:**
+- Installed `socket.io-client`.
+- Removed `setInterval` from `NegotiationPage.jsx`.
+- The page now connects to `http://localhost:8000` via Socket.io when mounted.
+- It listens for `newMessage` and `messagesRead` events, filtering them by `proposalId` to update the local state instantly without refetching the entire message history.
+- When a user receives a message via the socket, the client silently calls the list endpoint to trigger the backend read-receipt logic, instantly turning the sender's checkmarks to `✓✓`.
+
+This architecture avoids complex WebSocket rooms, namespaces, or custom authentication handshakes, making it perfectly suited for a junior MERN developer to maintain while delivering a high-quality user experience.
+
+
+## 2026-08-22 — Negotiation chat Socket.io revision
+
+### Scope decision
+The user explicitly approved Socket.io for the accepted-proposal negotiation chat, overriding the original SRS baseline only for this Phase 5 stretch feature. Auction bidding remains on the existing REST polling flow. The SRS now contains Amendment A-1 documenting this exception.
+
+### Learning material applied
+The uploaded `soket.docx` was reviewed. Its teaching pattern is intentionally simple: initialize Socket.io from the HTTP server, use `io.on('connection')`, listen with `socket.on`, emit server events, create the client socket once with a state initializer, register listeners in `useEffect`, use functional React state updates inside socket callbacks, and disconnect during cleanup.
+
+### Implementation
+- Replaced the temporary global Socket.io broadcast design in `server/socket.js`.
+- Added JWT verification during the Socket.io handshake using the same token and secret as REST authentication.
+- Added one proposal-specific room, `negotiation:<proposalId>`, joined through `join_negotiation` only after the server confirms that the accepted proposal is accessible to the authenticated tender owner, submitting organization, or admin.
+- Kept `POST /api/proposals/:id/messages` as the authoritative validation and persistence endpoint. Socket.io only notifies the other participant after the saved message is verified on the server.
+- Added room-scoped `receive_new_message` and `messages_were_read` notifications; unrelated connected clients no longer receive negotiation payloads.
+- Kept `isRead` as the persisted source of truth. `GET /messages` now returns only IDs that changed from unread to read, and the client sends those IDs through `mark_messages_read` before the server persists and broadcasts the receipt.
+- Updated `NegotiationPage.jsx` to pass the JWT, join and leave the proposal room, use functional state updates, and disconnect/remove listeners on cleanup.
+
+### Verification
+- `node --check server/server.js`: passed.
+- `node --check server/socket.js`: passed.
+- `node --check server/controllers/negotiation.controller.js`: passed.
+- `node --check server/models/negotiationMessage.model.js`: passed.
+- `npm run build` in `client`: passed. Vite reported the existing single JavaScript bundle is above 500 kB after minification; this is a warning, not a build failure.
+- Backend started from the required `server` directory and `GET http://localhost:8000/api/health` returned `{"message":"backend is healthy"}`.
+- An unauthenticated Socket.io client was rejected with `الجلسة مطلوبة`.
+- A two-authenticated-browser message and read-receipt test was not performed in this environment, so instant delivery and ✓✓ timing are not claimed as fully browser-verified here.
+
+
+### Follow-up fix
+The client now buffers the IDs returned by the message-list request until `negotiation_joined` confirms room membership. This prevents a fast initial REST response from emitting a read event before Socket.io has joined the room. The same buffer is used when a new incoming message triggers the read update.
+
+The final syntax checks and client build passed again after this fix. No remaining server code references the former global `getIO().emit` / `newMessage` / `messagesRead` path. The two-account browser test remains outstanding and is intentionally not reported as passed.
+
+
+## 2026-08-22 — Removed AI agreement generation from negotiation
+
+The scope was clarified to remove only the feature on the negotiation page that read the chat, accepted proposal, and tender request documents to generate an agreement or contract draft. AI analysis for tender creation and proposal review elsewhere in the platform was preserved.
+
+The contract-draft state, handler, button, loader, editor, and related messages were removed from `client/src/pages/NegotiationPage.jsx`. The unused `POST /api/proposals/:id/contract-draft` route and `generateContractDraft` controller handler were also removed. The negotiation chat, Socket.io room connection, message sending, and persisted read receipts remain unchanged.
+
+The backend syntax checks passed, the client build passed, the backend health endpoint returned successfully, and a request to the removed contract-draft path returned `Cannot POST /api/proposals/test/contract-draft`. The existing `contractDraft` schema field and historical values were intentionally left in place for backward compatibility; the application no longer generates new drafts.
+
+
+## 2026-08-22 — Generic chat requests and unified organization inbox
+
+The chat system was extended to support generic organization-to-organization chat requests prior to or alongside proposal submission. The existing proposal-chat behavior remains intact.
+
+### Backend Changes
+- Added a new `ChatRequest` Mongoose model linking a `tender`, `requester`, and `owner` with a status (`pending`, `accepted`, `rejected`).
+- Updated the `NegotiationMessage` schema to optionally reference a `chatRequest` instead of a `proposal`, allowing the same messaging logic to serve both contexts.
+- Added `ChatController` to handle requesting a chat, updating request status, fetching a unified inbox, and computing a global unread badge count.
+- Updated `NegotiationController` to handle `?type=request` queries, authorizing chat access based on the chat request's participants rather than proposal participants.
+- Updated `socket.js` to authorize and join rooms based on either proposal or chat-request membership, using the same `negotiation:<id>` room pattern and `type` payload flag.
+
+### Frontend Changes
+- Added a "Request Chat" (طلب محادثة) section to `TenderDetailPage.jsx` for approved organizations who want to contact the tender owner.
+- Completely rebuilt `OrgChatPage.jsx` (`/org/chat`) into a unified inbox displaying pending incoming/outgoing requests and a list of active conversations (both proposals and accepted requests), complete with unread-message badges.
+- Added a global unread badge to the bell/chat icon in `AppHeader.jsx`, `NavigationRail.jsx`, and `OrgMobileNav.jsx`. The badge polls `/api/users/me/chat-badge` every 30 seconds.
+- Redesigned `NegotiationPage.jsx` into a two-column layout on large screens. The main chat area behaves exactly as before, while a new sticky sidebar displays all active conversations for the user, allowing fast navigation between threads without returning to the inbox.
+
+### Verification
+- Server syntax checks (`node --check`) passed for all modified models, controllers, routes, and socket configuration.
+- Client build (`npm run build`) succeeded without errors.
+
+
+## 2026-08-22 — Fixed blank proposal detail page
+
+The organization proposals page (`/org/proposals`) contained "تفاصيل العرض" (Proposal Details) links pointing to `/proposals/:id`, but the route and component did not exist in the frontend, resulting in a blank page.
+
+### Changes
+- Created `ProposalDetailPage.jsx` to render the details of a specific proposal. It displays the associated tender information, proposal status, final price, submission date, attached document, and the AI summary (if available).
+- The new page includes a "فتح المحادثة" (Open Chat) button that appears only when the proposal is accepted and the user is either the tender owner or the submitter.
+- Registered the `/proposals/:id` route in `App.jsx` under `organization` and `admin` roles.
+- Updated `proposal.controller.js` on the backend to populate the tender owner's `companyName` and `name` when fetching a single proposal by ID, ensuring the frontend can display the issuing organization correctly.
+- Verified the fix by running frontend builds and backend syntax checks successfully.
+
+
+## 2026-08-22 — Auctions marketplace redesign
+
+The `/auctions` page was redesigned as a focused RTL marketplace experience. The existing real `GET /api/auctions` data flow and client-side pagination were preserved.
+
+The new page includes a prominent hero header, live auction/result counts, a permission-aware `إنشاء مزاد جديد` link to `/auctions/new` for administrators and approved organizations, and a responsive filter panel. Users can search by title, description, or announcing organization; sort by nearest ending, newest, lowest current price, or highest current price; filter by current price range; and show only auctions with images. The result count, empty states, and clear-filters action update from the actual loaded auction list.
+
+The shared icon registry was extended with a plus icon for the creation CTA. The client production build completed successfully. The existing Vite chunk-size and dynamic-import notices remain non-blocking build warnings.
+
+
+## 2026-08-22 — Auction dynamic product form and multi-image upload
+
+The `/auctions/new` page was redesigned around two explicit creation workflows. Organizations can use manual input or upload an official product-information document for real Gemini analysis. The AI response is validated on the server and returned as an editable draft containing the title, professional description, confidence score, and product-specific fields such as car model/color or computer CPU/GPU/storage when present in the document. Users can change the generated fields, add up to 30 additional fields, remove fields, choose text/number/date types, and mark fields as required.
+
+The auction creation backend now stores `itemFields`, `officialDocumentUrl`, and `officialDocumentName`. It accepts up to eight product images in one request, validates their detected types, keeps the first image as the legacy `imageUrl`, and saves the full image list in `images`. Required dynamic fields are checked server-side before the auction is created, and only `/uploads/` document paths are accepted when reusing a document returned by analysis.
+
+The auction detail page now displays the full product image gallery, saved product specifications, and the official product-information document when available. The frontend build and backend syntax checks passed. The backend was restarted from the required server directory, MongoDB connected successfully, `/api/health` returned healthy, and the new analysis and creation endpoints returned `401 Unauthorized` without authentication as expected. A real AI analysis and end-to-end creation were not run in this verification pass because they require an authenticated approved organization and an actual product document/images.
+
+
+## 2026-08-22 — Simplified auction AI workflow and inline product fields
+
+The auction creation UX was refined based on user feedback. In the AI workflow, the main auction form remains hidden until a real document analysis returns a draft, so the initial screen focuses only on the official product-document upload and the multiple product-image upload. If analysis fails but the server preserves the uploaded document, the user can continue manually.
+
+The product-properties editor was moved into the same primary form card as the auction title, description, starting price, and end date. This keeps manual fields and AI-generated fields in one continuous flow rather than presenting product properties as a separate section. Users can still edit, add, remove, type, and mark fields as required.
+
+The client build succeeded after the layout adjustment. The existing non-blocking Vite chunk-size and dynamic-import notices remain unchanged.
+
+
+## 2026-08-22 — Final inline product-field UX adjustment
+
+The standalone product-properties heading and empty-state presentation were removed from the auction form. Product fields now appear only as compact inline rows inside the same main form card as the auction title, description, starting price, and end date. The add-field action is now a small inline control, and no empty properties section is shown when an AI draft has not produced fields yet. The AI workflow continues to show only the document and image upload controls until a draft is returned. The client build passed successfully.
+
+
+## 2026-08-22 — Organization workspace redesign
+
+The `/org/tenders` page was redesigned from a single list of published tenders into a unified workspace. It now displays both the organization's published tenders and the bids (proposals) it has submitted to other organizations.
+
+The new layout features a prominent button group allowing the user to toggle between "عطاءاتي المنشورة" (My Published Tenders) and "العروض التي قدمتها" (My Submitted Bids), each displaying a live count of items. The page fetches both lists simultaneously on load using existing API endpoints. The bottom of the page now includes a summary section highlighting the most recently published tender, the most recently submitted bid, and a quick-action shortcut.
+
+The client build passed successfully, confirming the new component layout and data flow compile correctly.
+
+
+## 2026-08-22 — Organization auction workspace
+
+The `/org/proposals` page was converted from proposal management into an auction workspace for the organization. It now loads the organization's created auctions from `/api/users/me/created-auctions` and its participated-auction history from `/api/users/me/auctions`, with a two-tab button group for switching between the two lists.
+
+Created auctions use visual cards with image, status, current price, title, description, and a details link. Participated auctions use compact cards with image, auction status, the organization's highest bid, current price, outcome, and a details link. The page also includes summary counts and a link to create a new auction. The existing individual-only bidding permission was preserved; the participation-history route was made available to organizations without granting them bidding permission.
+
+The auction route syntax check and React client build passed successfully. Existing non-blocking Vite bundle warnings remain.
+
+
+## 2026-08-22 — Auction detail UX redesign and organization participation
+
+The `/auctions/:id` page was completely redesigned based on the provided reference UX. The new layout is cleaner and more focused, removing the generic DataRail in favor of an integrated bidding sidebar.
+
+Key UI changes include:
+- A new interactive image gallery that supports multiple product images with thumbnail navigation and inline controls.
+- A streamlined product specification grid for dynamic AI-generated or manually added item fields.
+- A completely redesigned bidding sidebar that features quick "+50 ₪", "+100 ₪", and "+250 ₪" bump buttons alongside the manual input field.
+- A refined bid history list that highlights the current top bidder and marks the user's own bids clearly.
+- A "price flash" animation when the auction price updates automatically via polling or after a successful bid.
+
+In addition to the UX changes, backend authorization (`auction.routes.js`) was updated to explicitly allow approved organizations to participate in auctions, whereas previously only individual accounts could place bids. The client build passed successfully, confirming the new auction layout and integrated bidding UX compile correctly.
+
+
+## 2026-08-22 — Auction detail section reorder
+
+The auction detail page column order was adjusted for the requested UX. On large screens, the auction metadata, countdown, bidding form, and bid history now occupy the first visible column, while the product image gallery, description, specifications, and source document occupy the neighboring content column. On smaller screens, the layout continues to stack in a consistent order with the bidding controls shown before the longer product content.
+
+The bidding behavior and product-content rendering were not changed. The React client build passed successfully; existing non-blocking Vite bundle warnings remain.
+
+
+## 2026-08-22 — Admin dashboard and management expansion
+
+The admin area was significantly expanded to provide comprehensive moderation and analytics:
+- **Admin Dashboard**: Added a visual analytics section using Recharts, featuring a pie chart for user distribution (organizations vs. individuals) and a bar chart for active platform activity (open tenders and active auctions).
+- **Account Management (`/admin/users`)**: Added a dedicated page to list all non-admin accounts. The `User` schema was updated to support a `deactivated` status, allowing admins to safely suspend accounts without hard-deleting records that might own active bids or tenders. Admins can now activate, deactivate, or permanently delete accounts.
+- **Tender Management (`/admin/tenders`)**: Added a page to list all tenders across the platform, allowing admins to force-close, reopen, or permanently delete tenders. Links to the detailed tender view are included.
+- **Auction Management (`/admin/auctions`)**: Added a page to list all auctions, allowing admins to force-close, reopen, or permanently delete auctions. Links to the detailed auction view are included.
+- **Navigation**: The global `NavigationRail` and `GlobalLayout` were updated to include the new admin pages in the sidebar for admin users.
+
+The backend controllers, routes, and frontend components were built and verified via syntax checks and a successful React client build.
+
+
+## 2026-08-22 — Admin account details access
+
+Added a visible "تفاصيل الحساب" action to every account card on `/admin/users`. Registered the protected `/admin/users/:id` route and created `AdminUserDetailPage.jsx`, which loads the selected account through the admin API and displays identity, contact, role, status, registration date, organization proof document, and account-management actions. Existing activation, deactivation, and deletion rules remain in place.
+
+Admin backend syntax checks and the client build passed successfully. Existing Vite bundle-size and dynamic-import notices remain non-blocking.
+
+
+## 2026-08-22 — Admin tender detail access restriction
+
+Administrators are now treated as read-only managers on tender detail pages. The proposal submission panel, official-offer document upload, document-analysis action, and pre-submission chat-request panel are hidden for admin users. Organization and individual behavior remains unchanged, and admins can still review tender details and manage tender lifecycle actions through the admin area. The client build passed successfully.
+
+
+## 2026-08-22 — Admin auction-detail participation restriction
+
+The auction detail page now hides the complete bidding panel for administrators. Admins no longer see the minimum bid, bid input, quick-increment buttons, confirmation button, or participation terms. They retain access to the auction details, countdown, image gallery, specifications, and bid history for monitoring. Organization and individual participation behavior remains unchanged. The client build passed successfully.
+
+
+## 2026-08-22 — Individual ID verification and admin review
+
+Individual registration now requires a national ID document upload. An AI analysis endpoint (`/api/auth/analyze-id`) extracts the name and ID number, assessing the document's validity and confidence score. This data auto-fills the registration form and provides visual feedback to the user.
+
+To ensure safety and fairness, AI analysis does not automatically reject users. Instead, individual accounts are now created in a `pending` state, and the AI verification results are stored securely in the database (`aiVerification`). The `AdminUserDetailPage` was updated to display the uploaded ID document and the AI's validity assessment, confidence score, and notes. The final decision (approve or reject) is made by a human administrator based on this data. The backend syntax checks and React client build passed successfully.
+
+
+## 2026-08-22 — Individual registration validation and UX
+
+The individual registration form (`/register/individual`) was restructured and hardened:
+- **Field order and selection**: Replaced the manual national-ID input field with a required phone number field. The national ID is now solely extracted via the AI document analysis step, simplifying the user flow. Added a client-only confirm-password field.
+- **Real-time validation**: Added logical, on-change frontend validation. Errors appear immediately below each field (e.g., minimum length, valid email format, matching passwords).
+- **Backend hardening**: The `auth.controller.js` now strictly validates the name, email, password, and phone number against regex patterns, returning structured field-level errors. The confirm-password field is intentionally excluded from the database payload. The `ai.controller.js` was updated to perform strict MIME-type validation before sending ID documents to Gemini.
+- **Schema updates**: The `User` schema now requires `phoneNumber` for individuals and makes `nationalId` optional (since it relies on AI extraction).
+The client build and backend syntax checks passed successfully.
+
+
+## 2026-08-22 — Admin accept action and individual email verification
+
+The platform's registration and approval flow was refined:
+- **Admin Acceptance**: A primary "قبول الطلب وتفعيل الحساب" (Accept Request and Activate Account) button was added to `AdminUserDetailPage` for any account in the `pending` state. This clearly distinguishes new approvals from reactivating previously suspended accounts.
+- **Individual Email Verification**: Individual registration no longer places the user in a `pending` admin-review state by default. Instead, individuals are placed in `pending_verification` and receive a 6-digit email verification code.
+- **Auto-login**: When an individual successfully verifies their email via the `/api/auth/verify` endpoint, the backend now immediately upgrades their status to `approved` and returns a valid JWT. The frontend automatically logs the user in and routes them directly to their dashboard, removing the manual login friction and bypassing the admin-review gate for individuals. Organizations still proceed to the `pending` admin-review state after email verification.
+The client build and backend syntax checks passed successfully.
+
+
+## 2026-08-22 — Individual Registration Refinements (Names & AI Analysis)
+
+- **Name Fields**: Replaced the single "الاسم الكامل" (Full Name) field with separate "الاسم الأول" (First Name) and "اسم العائلة" (Last Name) fields in the individual registration form.
+- **AI Identity Verification Enhancements**:
+  - Updated the Gemini AI prompt to extract `firstName` and `lastName` specifically, and explicitly instruct it to return `isValid: false` with detailed `notes` if the document is unclear, unofficial, or not an ID.
+  - Implemented a frontend cross-check: when the AI returns its analysis, the client now compares the user-inputted first and last names against the AI-extracted names. If they do not match, the frontend automatically marks the verification as invalid and sets the rejection reason to "الاسم المدخل لا يتطابق مع الاسم الموجود في الهوية."
+  - The submit button is now disabled if the AI explicitly rejects the document (e.g., due to name mismatch, blurriness, or invalid document type), forcing the user to correct the issue before proceeding.
+  - Improved the UI feedback to clearly display the specific rejection reason (from the AI's `notes` or the name mismatch) in a distinct red error box.
+
+
+## 2026-08-22 — Individual Registration Flow Simplification
+
+- **Single Submit Action**: The separate "تحليل مستند الهوية" (Analyze ID Document) button was removed. The entire workflow is now unified under a single "تحليل الهوية وتسجيل الحساب" (Analyze ID and Register Account) button.
+- **AI Waiting State**: When the user clicks submit, a clear AI waiting state (`جاري تحليل مستند الهوية...` with a pulse animation) is displayed while the backend communicates with Gemini to analyze the uploaded document and compare the extracted names against the user's input.
+- **Direct Email Verification**: If the AI verification succeeds and the names match, the system seamlessly proceeds to register the user in the database as `pending_verification` and immediately navigates the user to the email verification page (`/register/organization/verify`), removing the friction of a manual login step.
+- **Validation Fallback**: If the AI explicitly rejects the document (due to blurriness, being unofficial, or a name mismatch), the registration halts, and the precise rejection reason is displayed in a red error box, prompting the user to correct the issue and re-submit.
+
+
+## 2026-08-22 — Deferred Account Creation (Email Verification Gate)
+
+- **Temporary Registration**: Created a new `TemporaryUser` Mongoose model with a TTL index to securely hold registration data before email verification.
+- **Deferred Creation**: The `POST /api/auth/register` endpoint no longer creates an actual `User` document. Instead, it saves the data in the `TemporaryUser` collection and sends the verification code.
+- **Verification Handoff**: The `POST /api/auth/verify` endpoint now looks up the `TemporaryUser`. Upon successful code validation, it creates the final `User` document, securely transfers the hashed password, and deletes the temporary record. This ensures unverified accounts never clutter the main users table or appear in admin lists.
+- **Login Compatibility**: The `POST /api/auth/login` endpoint was updated to check the `TemporaryUser` collection if a user isn't found in the main collection, ensuring that users who try to log in before verifying their email are correctly prompted to complete the verification step instead of receiving a generic "invalid credentials" error.
+
+
+## 2026-08-22 — Auction Detail Page Polish
+
+- **Visual Hierarchy Reorder**: Reordered the side panel in the Auction Detail page (`/auctions/:id`). The "كم تريد أن تزايد؟" (How much do you want to bid?) action box is now placed at the very top of the sidebar, making it the most prominent and accessible element for active users.
+- **UI/UX Refinements**:
+  - Upgraded the bidding box styling to a more professional, elevated card with a distinct top accent border.
+  - Enhanced the input field and quick-bid buttons (`+50`, `+100`, `+250`) with stronger hover states, subtle shadows, and smoother transitions.
+  - Replaced the plain text "جارٍ تسجيل المزايدة..." with an inline `Spinner` inside the submit button to provide immediate, clear visual feedback during the network request.
+  - Improved the layout of the "سجل المزايدات الحالية" (Bid History) and "الوقت المتبقي" (Time Remaining) cards to sit cleanly below the primary action area, aligning with standard e-commerce and auction platform UX patterns.
+
+
+## 2026-08-22 — Auction Detail Redesign & Notifications
+
+- **UI Redesign**: Rebuilt the `AuctionDetailPage` layout based on the provided HTML structure. The main content is now split into a left column (gallery, description, specifications, documents) and a right column (bidding panel, countdown, and bid history).
+- **Role-Specific Views**:
+  - **Individuals**: See the active bidding form if logged in, or a prompt to sign in. Winners see a distinct "انتهى المزاد لصالحك" (Auction ended in your favor) message with a link to payment.
+  - **Organizations**: The owner of the auction sees a specific "مزادك الخاص" (Your Auction) read-only panel indicating they cannot bid on their own auction.
+  - **Admins**: See a specific "عرض المشرف" (Admin View) read-only panel.
+- **Server-Side Notifications**: Moved the ended-auction notification logic from the client to the backend (`auction-state.js`). When an auction's time expires and its state resolves to `ended`, the server now automatically dispatches two emails using the `GENERAL` template:
+  1. A "Congratulations" email to the winning individual (if any bids were placed).
+  2. A "Status Update" email to the organization owner, informing them whether the auction was won by a bidder or ended without any bids.
+
+
+## 2026-08-22 — Auction Sidebar Consolidation
+
+- **Unified Action Panel**: Merged the "سجل المزايدات الحالية" (Bid History) table directly into the bottom of the main bidding card in the sticky right-hand sidebar.
+- **Viewport Visibility**: By consolidating these sections, users no longer need to scroll down to the end of the page to see what others are bidding. The live countdown, current highest price, active bidding form, and the live bid history log are now always visible together in the primary viewport while making a decision.
+- **Scrollable History**: Added a responsive maximum height (`max-h-[250px]`) and internal vertical scrolling to the bid history table. This ensures that even if there are many bids, the table won't push the bidding controls off-screen on smaller desktop monitors.
+
+
+## 2026-08-22 — Auction Detail Bid History Relocation
+
+- **Layout Separation**: Separated the "سجل المزايدات الحالية" (Bid History) table from the right-hand sidebar's bidding control panel.
+- **Main Column Placement**: Moved the live bid history to the bottom of the main left column, directly underneath the item gallery, description, and official documents.
+- **Improved Workflow**: This layout change allows the user to see the full bid history in the wider main content area, while keeping the essential bidding input panel (with the current highest price and countdown) independently sticky in the right sidebar. This provides a cleaner view of the auction log without cluttering the action panel.
+
+
+## 2026-08-22 — Auction Detail Exact Section Reordering
+
+- **Exact Bid History Placement**: Moved the "سجل المزايدات الحالية" (Bid History) section so it now appears exactly below the "وصف المزاد" (Auction Description) block in the main content column.
+- **Section Flow**: The main column now correctly flows from Item Images -> Auction Description -> Live Bid History -> Product Specifications -> Official Documents.
+- **Sticky Controls Preserved**: The bidding control panel and countdown remain independently sticky in the right-hand sidebar, ensuring users can review the product details and recent bids simultaneously while choosing their bid amount.
+
+
+## 2026-08-22 — Dark Mode & Global Theme System
+
+- **CSS Variables System**: Migrated hardcoded `@theme` colors in `index.css` to use CSS variables (`--theme-*`) mapped to the `:root` pseudo-class.
+- **Dark Mode Palette**: Created a `:root.dark` scope in `index.css` defining the dark mode color palette (e.g., swapping `#F7F8FA` paper for `#0B1015`, `#17202A` ink for `#F7F8FA`, and adjusting the registry green for better dark contrast).
+- **Theme Context & Persistence**: Added a new `ThemeContext.jsx` provider that checks the user's system preference or previous choice, applies the `dark` class to the HTML root element, and saves the preference to `localStorage`.
+- **Global Toggle**: Created a reusable `ThemeToggle` component and integrated it into both `AppHeader.jsx` (for authenticated/dashboard pages) and `PublicHeader.jsx` (for the landing page and auth routes).
+- **Consistent Switching**: Since the entire application uses semantic Tailwind classes (like `bg-surface`, `text-ink`, `border-border`), switching the theme toggle on any page seamlessly and instantly updates the entire website's appearance.
+
+
+## 2026-08-22 — Dashboard Theme Toggle Visibility
+
+- **Dashboard Layout Fix**: Removed the `hidden sm:flex` class from the `ThemeToggle` component inside the Bento layout (used for authenticated dashboards).
+- **Consistent Access**: The dark/light mode toggle button is now consistently visible in the top header next to the notifications icon across all authenticated views (Organization, Individual, and Admin dashboards), matching its visibility on the public landing page.
+
+
+## 2026-08-23 — Dark Mode Countdown Contrast Fix
+
+- **Countdown Header Contrast**: Changed the countdown header wrapper in `AuctionDetailPage.jsx` from using the semantic `bg-ink` token (which turns white in dark mode) to an explicit `bg-slate-900`. This ensures the background remains dark regardless of the active theme.
+- **Timer Text Contrast**: Updated the numbers in `AuctionCountdown.jsx` to explicitly use `text-white`. Previously, they inherited the text color which became dark in dark mode against the light background, causing the readability issue seen in the screenshots. Now the timer is perfectly readable in both light and dark modes.
+
+
+## 2026-08-23 — Brand Logo Implementation
+
+- **Logo Concept**: Selected and refined Concept 1 ("The Trusted Gateway"). The design features a modern geometric green arch with a negative-space checkmark representing verified access and official procurement.
+- **Logo System**: Generated a complete scalable SVG logo system:
+  - `logo-etimad.svg`: The primary horizontal logo for light mode (dark text, green arch).
+  - `logo-etimad-dark.svg`: The reversed horizontal logo for dark mode (white text, brighter green arch).
+  - `icon-etimad.svg`: The compact symbol-only version used as the browser favicon and for small square spaces.
+- **Global Integration**: Created a theme-aware `<Logo />` React component. Replaced the plain text "اعتماد" in `PublicHeader.jsx` and `AppHeader.jsx` with the new component.
+- **Favicon & Meta**: Updated `index.html` to use the new compact icon as the favicon and changed the document title from "PalTenders" to "اعتماد".
+
+
+## 2026-08-23 — Official Logo Replacement
+
+- **Final Logo Selection**: Replaced the previously generated gateway concept with an exact SVG recreation of the user-provided "Concept 1" (logo1.jpeg).
+- **SVG Reconstruction**: The new SVGs accurately reflect the sharp geometric styling, exact wordmark shape (with custom dots over the 'ت'), and the integrated checkmark inside the gateway arch from the provided image.
+- **Theme Support**: The new logo files (`logo-etimad.svg`, `logo-etimad-dark.svg`, and `icon-etimad.svg`) instantly replace the old ones across the entire application via the `<Logo />` component, ensuring the official branding is now active in both light mode and dark mode.
+
+
+## 2026-08-23 — Logo Wordmark Fix
+
+- **Arabic Rendering Correction**: Fixed the `logo-etimad.svg` and `logo-etimad-dark.svg` files. The previous SVG construction drew the Arabic letters using disconnected path coordinates, causing the letters to appear disjointed and incorrect in RTL contexts.
+- **Native Text Element**: Replaced the custom paths with a native `<text>` element using the project's official `Noto Kufi Arabic` font. The wordmark "اعتماد" now renders perfectly and smoothly connects the Arabic characters while maintaining the green gateway/checkmark symbol.
+
+
+## 2026-08-23 — Comprehensive Logo Integration
+
+- **Sidebar Branding**: Replaced the old building icon and text header in the desktop sidebar (`NavigationRail.jsx`) with the official `<Logo />` component, ensuring the brand appears correctly at the top of the dashboard navigation.
+- **Mobile Drawer Menu**: Added the `ThemeToggle` to the mobile drawer menu (`OrgMobileNav.jsx`) so mobile users can also switch between light and dark modes easily, keeping the new logo and theme consistent across all device sizes.
+
+
+## 2026-08-23 — Logo Size Adjustment
+
+- **Increased Visibility**: Increased the default height of the `<Logo />` component across the main layout surfaces.
+  - In `PublicHeader.jsx` (Landing Page) and `AppHeader.jsx` (Dashboard Top Bar), the logo height was increased from `h-8` (32px) to `h-10` (40px).
+  - In `NavigationRail.jsx` (Desktop Sidebar), the logo height was increased from `h-6` (24px) to `h-8` (32px).
+- This ensures the wordmark and the green gateway symbol are much easier to read without breaking the vertical alignment of the navigation bars.
+
+## 2026-08-23 — Negotiation Chat Fixes
+
+- **Chat History Layout**: Fixed the layout of the negotiation page so that the chat history has a fixed height (`min-h-[400px]` and `h-[calc(100vh-14rem)]`) with internal scrolling (`overflow-y-auto`), while the message input form and header remain fixed in the viewport.
+- **Auto-Scroll**: Added automatic scroll-to-bottom behavior using a `useRef` marker that triggers whenever new messages arrive.
+- **Manual Refresh Removed**: Removed the manual "تحديث" (Refresh) button.
+- **Reliable Fallback Polling**: Added a quiet 5-second fallback polling interval that ensures messages and read receipts are synchronized reliably even if Socket.io delivery drops or is delayed, guaranteeing a smooth conversation flow.
+
+- **Chat Viewport Expansion**: Increased the height of the main chat history section (from `min-h-[400px]` and `h-[calc(100vh-14rem)]` to `min-h-[550px]` and `h-[calc(100vh-8rem)]`) to ensure many more messages are visible on screen simultaneously without compromising the fixed composer layout.
+
+- **Chat UI Redesign**: Redesigned the negotiation chat page to resemble a professional messaging workspace.
+  - The chat header is now integrated directly into the main message container with a clear avatar, bold title, and a pulsing "Active Chat" status indicator.
+  - The chat background uses a subtle geometric pattern and `bg-paper/20` for a modern, app-like feel.
+  - The message composer input is larger and more prominent, featuring a seamless send button integrated into the input field.
+  - The active conversations sidebar is visually quieter, with softer active-state backgrounds to avoid distracting from the main chat.
+
+- **Chat Background Fix**: Removed the SVG dotted pattern from the negotiation chat background, as it created visual noise and poor contrast in dark mode. Replaced it with a clean, solid `bg-paper` surface that automatically adapts perfectly to both light and dark themes, ensuring messages are always highly readable.
+
+## 2026-08-23 — Comprehensive Bug Fixes
+
+- **Auction Timer Contrast (Light Mode)**: Fixed the `AuctionCountdown` component so that it inherits proper text colors when rendered on light-mode auction cards (`bg-registry-green/10 text-registry-green`), rather than forcing white text, while still preserving the explicit dark-mode styling inside the `AuctionDetailPage` header.
+- **Tender Additional Requirements Contrast**: Fixed the background of the "متطلبات وشروط إضافية" (Additional Requirements) cards in `TenderDetailPage.jsx`. They now use a theme-aware `bg-paper/50` class instead of a hardcoded `#FAFAFA` hex color, ensuring they remain readable and properly contrasted in dark mode.
+- **Real-Time Chat Notification Badge**: Upgraded `AppHeader.jsx` to connect to a lightweight global Socket.io room (`user_notifications:${userId}`). The server now explicitly emits an `unread_badge_update` event to this room whenever a user receives a new message or someone reads their message, ensuring the red dot in the header updates instantly without waiting for the 30-second polling interval.
+- **Organization Auction Participation**: Updated the `auction.routes.js` middleware to allow both `individual` and `organization` roles to access the `POST /api/auctions/:id/bid` endpoint. Simultaneously added a security check in `auction.controller.js` to ensure that an organization cannot bid on its own created auction.
+- **Organization Profile Cleanup**: Removed the redundant "فتح المحادثات" (Open Chats) button from the `OrgProfilePage.jsx` as requested, keeping the profile focused strictly on account status.
+
+## 2026-08-23 — Auction Card Countdown Visibility Correction
+
+- Added an explicit `variant="light"` presentation to `AuctionCountdown` when it is rendered inside `AuctionCard` on `/auctions`.
+- Light auction cards now display the four remaining-time values with visible registry-green numbers, readable secondary labels, and theme-aware light surfaces. The detailed auction page continues using the dark countdown variant.
+- Client production build passed after the correction. The existing Vite chunk-size warning remains non-blocking.

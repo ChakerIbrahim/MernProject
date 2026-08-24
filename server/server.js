@@ -1,167 +1,90 @@
-require("dotenv").config({ quiet: true });
-
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-
-const connectToDatabase = require("./config/mongoose.config");
-const { UPLOAD_DIR, SIZE_MESSAGE } = require("./config/multer.config");
-const { globalLimiter } = require("./config/rateLimit.config");
-const healthRoutes = require("./routes/health.routes");
-const authRoutes = require("./routes/auth.routes");
-const userRoutes = require("./routes/user.routes");
-const adminRoutes = require("./routes/admin.routes");
-const tenderRoutes = require("./routes/tender.routes");
-const proposalRoutes = require("./routes/proposal.routes");
-const auctionRoutes = require("./routes/auction.routes");
-const negotiationRoutes = require("./routes/negotiation.routes");
+/**
+ * server.js
+ * Main entry point for the Express API.
+ * Configures global middleware, routes, error handling, and Socket.io.
+ */
+const path = require('path');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config({ path: path.resolve(__dirname, '../server.env'), override: true });
+require('./config/mongoose.config');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
 
-// --- middleware -----------------------------------------------------------
+const allowedOrigin = (process.env.CLIENT_ORIGIN || '')
+    .split(',')[0]
+    .trim();
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(helmet());
-app.use(
-  cors({
+app.use(helmet({ crossOriginResourcePolicy: false })); // allow serving uploads to other origins
+app.use(cors({
     credentials: true,
-    // NFR-S5 / C-6 — exactly one origin, from configuration. Never a wildcard.
-    origin: process.env.CLIENT_ORIGIN,
-  })
-);
+    origin: (origin, callback) => {
+        // Non-browser tools such as Postman do not send an Origin header.
+        if (!origin || origin === allowedOrigin) {
+            return callback(null, true);
+        }
+        return callback(new Error('Origin is not allowed by CORS'));
+    }
+}));
+app.use('/uploads', express.static('uploads'));
 
-// NFR-S / L-3 — a basic global policy. Tighter limits sit on the sensitive
-// endpoints in their own routers.
-app.use("/api", globalLimiter);
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 300,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'تم تجاوز عدد الطلبات المسموح به. حاول مرة أخرى لاحقاً.' }
+});
+app.use('/api', apiLimiter);
 
-// --- routes ---------------------------------------------------------------
-// Uploaded proof documents, served so the admin can open one (L-4: local disk
-// for the MVP). helmet's default Cross-Origin-Resource-Policy is same-origin,
-// which would stop the client on :5173 embedding these; relaxed here only, and
-// only for this directory.
-app.use(
-  "/uploads",
-  helmet.crossOriginResourcePolicy({ policy: "cross-origin" }),
-  express.static(UPLOAD_DIR, { index: false, dotfiles: "deny" })
-);
-
-app.use("/api", healthRoutes);
-app.use("/api", authRoutes);
-app.use("/api", userRoutes);
-app.use("/api", adminRoutes);
-app.use("/api", tenderRoutes);
-app.use("/api", proposalRoutes);
-app.use("/api", auctionRoutes);
-app.use("/api", negotiationRoutes);
-
-// Unknown path -> 404 JSON, never Express's default HTML page (API-5).
-app.use((req, res) => {
-  res.status(404).json({ message: "المسار المطلوب غير موجود." });
+app.get('/api/health', (req, res) => {
+    res.json({ message: "backend is healthy" });
 });
 
-// --- global error middleware (NFR-M5) -------------------------------------
-// Registered LAST: anything after this never runs. Controllers call next(err);
-// this is the only place an error response is shaped.
-const GENERIC_MESSAGES = {
-  400: "البيانات المُرسلة غير صالحة.",
-  401: "يجب تسجيل الدخول للمتابعة.",
-  403: "لا تملك صلاحية تنفيذ هذا الإجراء.",
-  404: "العنصر المطلوب غير موجود.",
-  500: "حدث خطأ غير متوقع في الخادم. حاول مرة أخرى لاحقاً.",
-};
+require('./routes/auth.routes')(app);
+require('./routes/admin.routes')(app);
+require('./routes/tender.routes')(app);
+require('./routes/proposal.routes')(app);
+require('./routes/ai.routes')(app);
+require('./routes/auction.routes')(app);
+require('./routes/chat.routes')(app);
 
-// eslint-disable-next-line no-unused-vars -- Express needs the 4th arg to
-// recognise this as an error handler.
+// Global error middleware must be last
+// Catches all forwarded errors and formats them into a consistent JSON response.
+// Does not return or throw; ends the request with an appropriate HTTP status.
 app.use((err, req, res, next) => {
-  // Expected client-side failures (401, 403, validation) are one line —
-  // otherwise every unauthenticated request buries the real faults in stack
-  // traces. Genuine server faults still log the full error object. Neither
-  // logs a request body, which would contain passwords (AGENTS.md §5).
-  const isExpected =
-    (Number(err.status || err.statusCode) || 500) < 500 ||
-    err.name === "ValidationError" ||
-    err.name === "CastError" ||
-    err.code === 11000;
-
-  if (isExpected) {
-    console.warn(`[warn] ${req.method} ${req.originalUrl} — ${err.message}`);
-  } else {
-    console.error(`[error] ${req.method} ${req.originalUrl}`, err);
-  }
-
-  // multer rejects oversized or unexpected files before the controller runs.
-  // These are validation failures, not server faults — 400, never 500.
-  if (err.name === "MulterError") {
-    const field = err.field || "file";
-    const message =
-      err.code === "LIMIT_FILE_SIZE" ? SIZE_MESSAGE : "تعذّر رفع الملف المرفق.";
-    return res.status(400).json({ errors: { [field]: message } });
-  }
-
-  // Mongoose validation -> 400 with a per-field map (API-3, DATA-3).
-  if (err.name === "ValidationError" && err.errors) {
-    const errors = {};
-    for (const field of Object.keys(err.errors)) {
-      errors[field] = err.errors[field].message;
+    if (err.type === 'entity.parse.failed' || err.status === 400) {
+        return res.status(400).json({ errors: { body: "صيغة البيانات المرسلة غير صحيحة" } });
     }
-    return res.status(400).json({ errors });
-  }
-
-  // Duplicate key (e.g. an already-registered email, FR-1.1) -> 400.
-  if (err.code === 11000) {
-    const errors = {};
-    for (const field of Object.keys(err.keyPattern || {})) {
-      errors[field] = "هذه القيمة مستخدمة مسبقاً.";
+    if (err.name === 'CastError' && err.kind === 'ObjectId') {
+        return res.status(404).json({ error: "العنصر غير موجود" });
     }
-    return res.status(400).json({ errors });
-  }
+    if (err.name === 'ValidationError') {
+        const errors = {};
+        for (let field in err.errors) {
+            errors[field] = err.errors[field].message;
+        }
+        return res.status(400).json({ errors });
+    }
+    if (err.name === 'MulterError') {
+        let msg = err.message;
+        if (err.code === 'LIMIT_FILE_SIZE' || err.message === 'File too large') msg = 'حجم الملف يتجاوز الحد الأقصى (5 ميجابايت)';
+        if (err.code === 'LIMIT_UNEXPECTED_FILE' && err.field === 'proofDocument') msg = err.message; // From our custom filter
+        else if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = 'الملف غير مدعوم، يرجى رفع صورة أو ملف PDF'; // Fallback
 
-  // A malformed ObjectId is a missing resource, not a server fault (API-5).
-  if (err.name === "CastError") {
-    return res.status(404).json({ message: GENERIC_MESSAGES[404] });
-  }
-
-  // A controller-built per-field map, e.g. a duplicate email caught before
-  // the write (API-3, DATA-3).
-  if (err.errors && typeof err.errors === "object") {
-    return res.status(Number(err.status) || 400).json({ errors: err.errors });
-  }
-
-  // A single user-facing message for an endpoint the SRS specifies with an
-  // { error } body — login is the one case (SRS §4.2).
-  if (typeof err.error === "string") {
-    return res.status(Number(err.status) || 400).json({ error: err.error });
-  }
-
-  const status = Number(err.status || err.statusCode) || 500;
-  const message =
-    err.expose && err.message
-      ? err.message
-      : GENERIC_MESSAGES[status] || GENERIC_MESSAGES[500];
-
-  return res.status(status).json({ message });
+        return res.status(400).json({ errors: { file: msg } });
+    }
+    console.error(err);
+    res.status(500).json({ error: "حدث خطأ غير متوقع في الخادم" });
 });
 
-// --- start ----------------------------------------------------------------
-const start = async () => {
-  try {
-    await connectToDatabase();
-  } catch {
-    // connectToDatabase already logged the full error object.
-    process.exit(1);
-  }
+const PORT = process.env.PORT || 8000;
+const server = app.listen(PORT, () => console.log(`server is running on port ${PORT}`));
 
-  app.listen(PORT, () => {
-    console.log(`server is running on port ${PORT}`);
-  });
-};
-
-// Self-start only when run directly (`npm start`). Importing server.js from a
-// script or a test gets the fully configured app without opening a database
-// connection or binding a port.
-if (require.main === module) {
-  start();
-}
-
-module.exports = app;
+// Initialize Socket.io
+const socket = require('./socket');
+socket.init(server, allowedOrigin);

@@ -1,30 +1,28 @@
-const mongoose = require("mongoose");
+/**
+ * bidHistory.model.js
+ * Mongoose schema and model for logging individual bids on auctions.
+ * Records the bidder, auction, and amount at a specific point in time.
+ */
+const mongoose = require('mongoose');
 
-const bidHistorySchema = new mongoose.Schema(
-  {
+const BidHistorySchema = new mongoose.Schema({
     auction: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Auction",
-      required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Auction',
+        required: [true, "المزاد مطلوب"]
     },
     bidder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, "صاحب المزايدة مطلوب"]
     },
     amount: {
-      type: Number,
-      required: [true, "قيمة المزايدة مطلوبة."],
-      min: [0.01, "قيمة المزايدة يجب أن تكون أكبر من صفر."],
-    },
-  },
-  // SRS §5.5 lists createdAt only; updatedAt is harmless and consistent with
-  // every other collection.
-  { timestamps: true }
-);
+        type: Number,
+        required: [true, "قيمة المزايدة مطلوبة"],
+        min: [0.01, "قيمة المزايدة يجب أن تكون أكبر من صفر"]
+    }
+}, { timestamps: { createdAt: true, updatedAt: false } });
 
-// The auction detail endpoint reads recent bids on every poll (every 4s per
-// viewer). Without this index that query degrades as history grows.
-bidHistorySchema.index({ auction: 1, createdAt: -1 });
+BidHistorySchema.index({ auction: 1, createdAt: -1 });
 
-module.exports = mongoose.model("BidHistory", bidHistorySchema);
+module.exports = mongoose.model('BidHistory', BidHistorySchema);

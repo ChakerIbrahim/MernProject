@@ -1,18 +1,33 @@
-/**
- * The data rail from design.md §5: a border-inline-start block of key/value
- * metadata, used on detail and card views instead of a decorative info box.
- *
- * @param {{label: string, value: React.ReactNode}[]} items
- */
-const DataRail = ({ items }) => (
-  <dl className="border-s-2 border-border ps-4 text-sm">
-    {items.map((item) => (
-      <div key={item.label} className="mb-2 flex flex-wrap gap-x-2 last:mb-0">
-        <dt className="text-text-secondary">{item.label}:</dt>
-        <dd className="text-ink">{item.value}</dd>
-      </div>
-    ))}
-  </dl>
-);
+import PropTypes from 'prop-types';
 
-export default DataRail;
+export default function DataRail({ title, items }) {
+  return (
+    <div className="space-y-4 border-e-2 border-registry-green bg-surface p-5 pe-6">
+      {title ? <h2 className="text-xl font-bold text-ink">{title}</h2> : null}
+      <div className="space-y-3 text-sm">
+        {items.map((item) => (
+          <p key={item.label} className="flex items-center justify-between gap-4">
+            <span className="text-text-secondary">{item.label}</span>
+            {typeof item.value === 'string' || typeof item.value === 'number' ? (
+              <bdi className={item.tabular ? 'tabular-nums' : ''} dir={item.ltr ? 'ltr' : 'auto'}>
+                {item.value}
+              </bdi>
+            ) : (
+              item.value
+            )}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+DataRail.propTypes = {
+  title: PropTypes.string,
+  items: PropTypes.arrayOf(PropTypes.shape({
+    label: PropTypes.string.isRequired,
+    value: PropTypes.node.isRequired,
+    tabular: PropTypes.bool,
+    ltr: PropTypes.bool
+  })).isRequired
+};
